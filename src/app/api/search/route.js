@@ -12,16 +12,35 @@ import { embedQuery } from '@/lib/embeddings'
 // docs/opportunity-mapping.md item 3.3.
 export const COVERED_CHAPTERS = ['1', '2', '3', '4']
 
-// Códigos CBHPM têm sempre 8 dígitos no formato D.DD.DD.DD-D. Se o usuário
-// colar/digitar o código só com números (sem pontuação — comum ao copiar de
-// outro sistema), comparar o texto puro contra "codigo" (salvo formatado)
-// nunca bate — ex: "30913012" nunca encontra "3.09.13.01-2". Reconstrói a
-// pontuação só nesse caso específico e inequívoco (exatamente 8 dígitos);
-// para outras quantidades de dígitos, mantém o termo original (substring),
-// para não mudar buscas parciais mais curtas de forma inesperada.
+// Códigos CBHPM têm sempre 8 dígitos no formato D.DD.DD.DD-D. Usuários
+// colando de outro sistema digitam de jeitos variados que não batem
+// literalmente contra "codigo" (salvo sempre formatado com ponto/hífen):
+//   "30913012"     (sem nenhuma pontuação)
+//   "3-09-13-01-2" (pontuação errada — hífen em vez de ponto)
+//   "3 09 13 01 2" (espaços)
+//   "3-09-13"      (código parcial com separador errado/faltando)
+// Reconstrói a pontuação sempre que der pra reconhecer dígitos "soltos" de
+// um código: 8 dígitos completos (qualquer separador ou nenhum), ou menos
+// de 8 dígitos MAS com pelo menos um separador já digitado (sinal de que o
+// usuário claramente tentou pontuar um código parcial). Buscas numéricas
+// curtas sem nenhuma pontuação (ex: "12") ficam como estão — sem sinal de
+// que é um fragmento de código, reformatar mudaria o resultado sem necessidade.
 export function normalizeCodigoSearchTerm(term) {
-  if (!/^\d{8}$/.test(term)) return term
-  return `${term[0]}.${term.slice(1, 3)}.${term.slice(3, 5)}.${term.slice(5, 7)}-${term[7]}`
+  const hasSeparator = /[.\-\s]/.test(term)
+  const digits = term.replace(/[.\-\s]/g, '')
+  if (!/^\d+$/.test(digits) || digits.length === 0 || digits.length > 8) return term
+  if (digits.length !== 8 && !hasSeparator) return term
+
+  const GROUP_SIZES = [1, 2, 2, 2, 1]
+  const SEPARATORS = ['.', '.', '.', '-']
+  const groups = []
+  let i = 0
+  for (const size of GROUP_SIZES) {
+    if (i >= digits.length) break
+    groups.push(digits.slice(i, i + size))
+    i += size
+  }
+  return groups.reduce((acc, g, idx) => (idx === 0 ? g : `${acc}${SEPARATORS[idx - 1]}${g}`), '')
 }
 
 // Best-effort: loga buscas sem resultado para orientar a priorização de
@@ -74,8 +93,8 @@ export async function GET(request) {
 
   const term = query.trim().slice(0, 200)
 
-  // Detecta se é busca por código (padrão numérico com pontos/hífens)
-  const isCodeSearch = /^[\d\.\-]+$/.test(term)
+  // Detecta se é busca por código (padrão numérico com pontos/hífens/espaços)
+  const isCodeSearch = /^[\d\.\-\s]+$/.test(term)
 
   const searchTerm = isCodeSearch ? normalizeCodigoSearchTerm(term) : term
 

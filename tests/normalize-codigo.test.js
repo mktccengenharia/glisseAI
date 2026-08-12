@@ -10,11 +10,24 @@ describe('normalizeCodigoSearchTerm', () => {
     expect(normalizeCodigoSearchTerm('40101010')).toBe('4.01.01.01-0')
   })
 
-  it('não altera termos que já têm pontuação', () => {
+  it('não altera termos que já têm pontuação correta', () => {
     expect(normalizeCodigoSearchTerm('3.09.13.01-2')).toBe('3.09.13.01-2')
   })
 
-  it('não altera buscas numéricas parciais (menos de 8 dígitos)', () => {
+  it('corrige separador errado (hífen em vez de ponto) num código completo', () => {
+    expect(normalizeCodigoSearchTerm('3-09-13-01-2')).toBe('3.09.13.01-2')
+  })
+
+  it('corrige espaços em vez de pontuação num código completo', () => {
+    expect(normalizeCodigoSearchTerm('3 09 13 01 2')).toBe('3.09.13.01-2')
+  })
+
+  it('reconstrói um código parcial que já tem algum separador', () => {
+    expect(normalizeCodigoSearchTerm('3-09-13')).toBe('3.09.13')
+    expect(normalizeCodigoSearchTerm('3.09.13')).toBe('3.09.13')
+  })
+
+  it('não altera buscas numéricas curtas sem nenhuma pontuação (sem sinal de ser um código)', () => {
     expect(normalizeCodigoSearchTerm('12')).toBe('12')
     expect(normalizeCodigoSearchTerm('309130')).toBe('309130')
   })
