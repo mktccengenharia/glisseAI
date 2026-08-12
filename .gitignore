@@ -29,3 +29,7 @@ Thumbs.db
 .aiox-core/local/
 .claude/settings.local.json
 .aiox/install-log.txt
+
+# CBHPM import pipeline (dados intermediários, não versionar)
+scripts/cbhpm-import/tmp/
+scripts/cbhpm-import/output/

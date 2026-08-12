@@ -114,6 +114,10 @@ function ProcedureCard({ item }) {
   const valorUco = item.valorUcoR$ || item.valor_uco || 0
   const versao = item.versao || '—'
   const anestesia = item.anestesia || '0'
+  // null = não consta na fonte (não é o mesmo que 0) — nunca usar `|| 0` aqui
+  const numeroAuxiliares = item.numero_auxiliares ?? null
+  const porteAnestesico = item.porte_anestesico ?? null
+  const AUX_PCT = [0.6, 0.4, 0.3, 0.3]
 
   return (
     <div className="mt-3 border border-gray-100 rounded-2xl overflow-hidden bg-white shadow-sm">
@@ -133,8 +137,28 @@ function ProcedureCard({ item }) {
             <p className="text-sm font-medium text-black">{uco} · {fmt(valorUco)}</p>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-0.5">Anestesia</p>
-            <p className="text-sm font-medium text-black">{anestesia !== '0' ? anestesia : 'Sem anestesia'}</p>
+            <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-0.5">Porte Anestésico</p>
+            <p className="text-sm font-medium text-black">
+              {porteAnestesico !== null ? porteAnestesico : (anestesia !== '0' ? anestesia : 'Sem anestesia')}
+            </p>
+          </div>
+          <div className="col-span-2">
+            <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-0.5">Auxiliares de Cirurgia</p>
+            {numeroAuxiliares === null && (
+              <p className="text-sm font-medium text-gray-400">Não consta na fonte</p>
+            )}
+            {numeroAuxiliares === 0 && (
+              <p className="text-sm font-medium text-black">0 — não paga auxiliar</p>
+            )}
+            {numeroAuxiliares > 0 && (
+              <ul className="text-sm text-black space-y-0.5">
+                {Array.from({ length: numeroAuxiliares }, (_, j) => (
+                  <li key={j}>
+                    {j + 1}º auxiliar — {AUX_PCT[j] * 100}% · {fmt(valorPorte * AUX_PCT[j])}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       </div>
