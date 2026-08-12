@@ -1,10 +1,10 @@
 // Mapeamento edição de procedimentos -> fonte de valores de porte, confirmado
-// manualmente contra os PDFs em C:\Users\john2\Downloads\TABELAS-.../TABELAS.
+// manualmente contra os PDFs em C:\Users\carme\OneDrive\Documentos\JOHN\tabelas_cbhpm\tabelas_cbhpm.
 // A edição 2018 não está aqui: já foi importada antes e é corrigida à parte
 // por 07-fix-2018-porte.mjs (troca de vigência de valores, não reprocessamento
 // do parser de procedimentos).
 
-export const SOURCE_DIR = 'C:\\Users\\john2\\Downloads\\TABELAS-20260812T014630Z-1-001\\TABELAS'
+export const SOURCE_DIR = 'C:\\Users\\carme\\OneDrive\\Documentos\\JOHN\\tabelas_cbhpm\\tabelas_cbhpm'
 
 // 3ª a 2016 usam 30/20/20/20; só a 2018 usa 60/40/30/30 (confirmado lendo a
 // seção "5. AUXILIARES DE CIRURGIA" de cada PDF).

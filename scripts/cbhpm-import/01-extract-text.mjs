@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const TMP_DIR = path.join(__dirname, 'tmp')
-const SOURCE_DIR = 'C:\\Users\\john2\\Downloads\\TABELAS-20260812T014630Z-1-001\\TABELAS'
+const SOURCE_DIR = 'C:\\Users\\carme\\OneDrive\\Documentos\\JOHN\\tabelas_cbhpm\\tabelas_cbhpm'
 
 const FILES = [
   { src: 'CBHPM 2018.pdf', out: 'cbhpm-2018.txt' },
