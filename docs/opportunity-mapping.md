@@ -108,7 +108,7 @@ Implementado nesta sessão, sem dependências externas ausentes:
 | 5.3/5.4 Formatação + sem travessão | ✅ Feito (Story 1.1) | — |
 | 5.2 Copiar código/nome isolados | ✅ Feito (Story 1.1) | — |
 | 1.2 Busca full-text (parcial) | ✅ Feito (Story 1.2) | Usa `to_tsvector('portuguese', ...)` já indexado |
-| 1.2/5.1 Busca semântica (embeddings) | ✅ Feito (Story 1.3) — ⚠️ Migration + backfill pendentes | `Xenova/multilingual-e5-small` via `@huggingface/transformers`, rodando localmente na função serverless (sem API externa, sem custo por chamada). Fallback quando full-text/ILIKE não encontram nada. Ver seção 12 de `supabase/schema.sql` |
+| 1.2/5.1 Busca semântica (embeddings) | ✅ Feito e ativo em produção (Story 1.3) | `Xenova/multilingual-e5-small` via `@huggingface/transformers`, rodando localmente na função serverless. Migration aplicada e backfill rodado (2026-08-12): 16.902 procedimentos com embedding. Testado ao vivo: "tirar próstata" encontra "Eletrovaporização de próstata" / "Ressecção endoscópica da próstata" |
 | 3.3 Mensagem de capítulo não coberto | ✅ Feito | `/api/search` retorna `coveredChapters`, UI monta a mensagem |
 | 3.1 Feedback thumbs up/down | ✅ Feito (código) — ⚠️ Migration pendente | Precisa rodar seção 10 de `supabase/schema.sql` no SQL Editor |
 | 1.4 Analytics de buscas sem resultado | ✅ Feito (código) — ⚠️ Migration pendente | Precisa rodar seção 11 de `supabase/schema.sql` no SQL Editor |
@@ -116,8 +116,7 @@ Implementado nesta sessão, sem dependências externas ausentes:
 | 2.3 CI/CD | ✅ Feito | `.github/workflows/ci.yml` (lint + test + build) |
 
 **Ação pendente do usuário para ativar 100% do que foi implementado:**
-1. Rodar as seções 10, 11 e 12 de `supabase/schema.sql` no SQL Editor do Supabase (tabelas `chat_feedback`, `search_events`, extensão `vector` + coluna `embedding` + RPC de busca semântica)
-2. Rodar `node scripts/cbhpm-import/11-generate-embeddings.mjs` para popular os embeddings dos procedimentos já importados
+1. Rodar as seções 10 e 11 de `supabase/schema.sql` no SQL Editor do Supabase (tabelas `chat_feedback` e `search_events`) — busca semântica (seção 12) já está aplicada e ativa desde 2026-08-12
 
 Bloqueado por insumo externo (não é falta de esforço de código):
 
