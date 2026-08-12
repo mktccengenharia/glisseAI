@@ -3,21 +3,26 @@
 
 import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY // Usar service key no backend
-)
-
 export async function GET(request) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY // Usar service key no backend
+
+  if (!supabaseUrl || !supabaseKey) {
+    console.error('Supabase env vars ausentes (NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)')
+    return Response.json({ error: 'Serviço de busca não configurado' }, { status: 500 })
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseKey)
+
   const { searchParams } = new URL(request.url)
   const query = searchParams.get('q')
   const version = searchParams.get('version') || 'ALL'
 
-  if (!query || query.trim().length < 2) {
+  if (typeof query !== 'string' || query.trim().length < 2) {
     return Response.json({ results: [] })
   }
 
-  const term = query.trim()
+  const term = query.trim().slice(0, 200)
 
   // Detecta se é busca por código (padrão numérico com pontos/hífens)
   const isCodeSearch = /^[\d\.\-]+$/.test(term)

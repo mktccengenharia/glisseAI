@@ -2,6 +2,15 @@
 import React, { useState, useRef, useCallback } from 'react'
 import { LucideSend, LucideClipboard, LucideCheck, LucideChevronDown } from 'lucide-react'
 
+// ─── Utilitários ───────────────────────────────────────────────────────────
+
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
 // ─── Componentes Inline ────────────────────────────────────────────────────
 
 function Button({ children, onClick, variant = 'default', size = 'default', className = '' }) {
@@ -341,7 +350,7 @@ export default function GlisseAI() {
                   <div
                     className="text-sm text-black leading-relaxed"
                     dangerouslySetInnerHTML={{
-                      __html: msg.text
+                      __html: escapeHtml(msg.text)
                         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                         .replace(/`(.*?)`/g, '<code class="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">$1</code>')
                         .replace(/\n/g, '<br/>')

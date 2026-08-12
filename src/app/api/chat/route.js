@@ -5,7 +5,11 @@ export async function POST(request) {
   try {
     const { query, procedures } = await request.json()
 
-    if (!query || !procedures || procedures.length === 0) {
+    if (typeof query !== 'string' || !query.trim() || query.length > 2000) {
+      return Response.json({ error: 'Parâmetros inválidos' }, { status: 400 })
+    }
+
+    if (!Array.isArray(procedures) || procedures.length === 0 || procedures.length > 20) {
       return Response.json({ error: 'Parâmetros inválidos' }, { status: 400 })
     }
 
@@ -42,22 +46,36 @@ DADOS DA TABELA (use apenas estes):
 ${procedureContext}`
 
     // Chama a API do Groq (compatível com OpenAI)
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${groqApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'llama3-8b-8192',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: query }
-        ],
-        temperature: 0.1, // Baixo para respostas precisas e determinísticas
-        max_tokens: 1024,
-      }),
-    })
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 15000)
+
+    let response
+    try {
+      response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${groqApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'llama-3.1-8b-instant',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: query }
+          ],
+          temperature: 0.1, // Baixo para respostas precisas e determinísticas
+          max_tokens: 1024,
+        }),
+        signal: controller.signal,
+      })
+    } catch (fetchError) {
+      if (fetchError.name === 'AbortError') {
+        return Response.json({ error: 'Tempo limite ao consultar a IA excedido' }, { status: 504 })
+      }
+      throw fetchError
+    } finally {
+      clearTimeout(timeout)
+    }
 
     if (!response.ok) {
       const error = await response.text()
