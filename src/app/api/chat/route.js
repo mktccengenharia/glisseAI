@@ -19,9 +19,12 @@ export async function POST(request) {
     }
 
     // Percentual pago a cada auxiliar sobre o valor do porte do cirurgião
-    // (CBHPM, Normas Gerais, item 5 "Auxiliares de Cirurgia"): 60% para o 1º,
-    // 40% para o 2º, 30% para o 3º e para o 4º.
-    const AUX_PCT = [0.6, 0.4, 0.3, 0.3]
+    // (CBHPM, Normas Gerais, item 5 "Auxiliares de Cirurgia") MUDA por edição:
+    // 3ª edição até 2016 usam 30/20/20/20; só a 2018 usa 60/40/30/30. Por isso
+    // vem de p.aux_pct (dado por procedimento, calculado no import a partir da
+    // edição) em vez de constante fixa — fallback só para linhas antigas sem
+    // esse campo populado.
+    const DEFAULT_AUX_PCT = [0.3, 0.2, 0.2, 0.2]
     const formatR$ = (v) => `R$ ${v.toFixed(2).replace('.', ',')}`
 
     function auxiliaresLine(p) {
@@ -31,9 +34,10 @@ export async function POST(request) {
       if (p.numero_auxiliares === 0) {
         return '  Nº de Auxiliares: 0 (este código NÃO paga auxiliares de cirurgia)'
       }
+      const auxPct = Array.isArray(p.aux_pct) && p.aux_pct.length ? p.aux_pct : DEFAULT_AUX_PCT
       const linhas = Array.from({ length: p.numero_auxiliares }, (_, j) => {
-        const valor = typeof p.valor_porte === 'number' ? formatR$(p.valor_porte * AUX_PCT[j]) : 'valor do porte indisponível'
-        return `    ${j + 1}º auxiliar: ${AUX_PCT[j] * 100}% do valor do porte = ${valor}`
+        const valor = typeof p.valor_porte === 'number' ? formatR$(p.valor_porte * auxPct[j]) : 'valor do porte indisponível'
+        return `    ${j + 1}º auxiliar: ${auxPct[j] * 100}% do valor do porte = ${valor}`
       }).join('\n')
       return `  Nº de Auxiliares: ${p.numero_auxiliares}\n${linhas}`
     }
@@ -73,7 +77,7 @@ REGRAS ABSOLUTAS:
 - Seja direto e objetivo
 - Se houver mais de um resultado, liste todos de forma clara
 
-REGRA DE AUXILIARES DE CIRURGIA (Normas Gerais da CBHPM, item 5): a valoração dos auxiliares corresponde a 60% do valor do porte do cirurgião para o 1º auxiliar, 40% para o 2º, 30% para o 3º e 30% para o 4º.
+REGRA DE AUXILIARES DE CIRURGIA (Normas Gerais da CBHPM, item 5): o percentual de rateio muda por edição da tabela (algumas usam 60/40/30/30, outras 30/20/20/20) — os percentuais e valores em R$ de cada auxiliar já vêm calculados corretamente no contexto abaixo para a edição correta, apenas reproduza.
 
 DADOS DA TABELA (use apenas estes):
 ${procedureContext}`

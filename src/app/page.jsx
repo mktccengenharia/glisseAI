@@ -117,7 +117,9 @@ function ProcedureCard({ item }) {
   // null = não consta na fonte (não é o mesmo que 0) — nunca usar `|| 0` aqui
   const numeroAuxiliares = item.numero_auxiliares ?? null
   const porteAnestesico = item.porte_anestesico ?? null
-  const AUX_PCT = [0.6, 0.4, 0.3, 0.3]
+  // Percentual de rateio muda por edição (60/40/30/30 na 2018, 30/20/20/20 nas
+  // demais) — vem do próprio registro, com fallback só para dado antigo.
+  const AUX_PCT = Array.isArray(item.aux_pct) && item.aux_pct.length ? item.aux_pct : [0.3, 0.2, 0.2, 0.2]
 
   return (
     <div className="mt-3 border border-gray-100 rounded-2xl overflow-hidden bg-white shadow-sm">

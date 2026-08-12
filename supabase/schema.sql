@@ -90,3 +90,10 @@ create policy "Leitura pública"
   on public.cbhpm_porte_valores
   for select
   using (true);
+
+-- 9. Percentual de rateio de auxiliares por edição (muda entre edições: 3ª a
+--    2016 usam 30/20/20/20, a 2018 usa 60/40/30/30). Denormalizado também em
+--    cbhpm_procedures (calculado no import) porque /api/search e /api/chat
+--    não fazem join com cbhpm_versoes.
+alter table public.cbhpm_versoes add column if not exists aux_pct jsonb;
+alter table public.cbhpm_procedures add column if not exists aux_pct jsonb;
