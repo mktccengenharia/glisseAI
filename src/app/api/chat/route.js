@@ -1,7 +1,21 @@
 // Rota de API: /api/chat
 // Usada para processar consultas via Groq (OpenAI-compatible) + dados do Supabase
 
+import { rateLimit } from '@/lib/rate-limit'
+
 export async function POST(request) {
+  const { allowed, retryAfterSeconds } = rateLimit(request, {
+    scope: 'chat',
+    limit: 15,
+    windowMs: 60_000,
+  })
+  if (!allowed) {
+    return Response.json(
+      { error: 'Muitas requisições. Tente novamente em instantes.' },
+      { status: 429, headers: { 'Retry-After': String(retryAfterSeconds) } }
+    )
+  }
+
   try {
     const { query, procedures } = await request.json()
 

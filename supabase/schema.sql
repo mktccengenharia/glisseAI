@@ -97,3 +97,46 @@ create policy "Leitura pública"
 --    não fazem join com cbhpm_versoes.
 alter table public.cbhpm_versoes add column if not exists aux_pct jsonb;
 alter table public.cbhpm_procedures add column if not exists aux_pct jsonb;
+
+-- 10. Feedback do usuário sobre respostas do chat (útil / não útil).
+--     Ver docs/opportunity-mapping.md item 3.1 e src/app/api/feedback/route.js.
+--     APLICAR MANUALMENTE no SQL Editor do Supabase (sem isso, o botão de
+--     feedback na UI continua funcionando na interface, mas o registro falha
+--     silenciosamente no backend até a tabela existir).
+create table if not exists public.chat_feedback (
+  id          bigserial primary key,
+  message_id  text not null,
+  query       text,
+  rating      text not null check (rating in ('up', 'down')),
+  created_at  timestamptz default now()
+);
+
+alter table public.chat_feedback enable row level security;
+
+drop policy if exists "Escrita via service role" on public.chat_feedback;
+create policy "Escrita via service role"
+  on public.chat_feedback
+  for insert
+  with check (true);
+
+-- 11. Log de buscas sem resultado, para priorizar expansão de cobertura de
+--     capítulos com dado real de uso em vez de achismo.
+--     Ver docs/opportunity-mapping.md item 1.4 e src/app/api/search/route.js.
+--     APLICAR MANUALMENTE no SQL Editor do Supabase (best-effort: a busca
+--     continua funcionando normalmente enquanto essa tabela não existir).
+create table if not exists public.search_events (
+  id             bigserial primary key,
+  termo          text,
+  versao         text,
+  tipo           text,
+  teve_resultado boolean not null default false,
+  created_at     timestamptz default now()
+);
+
+alter table public.search_events enable row level security;
+
+drop policy if exists "Escrita via service role" on public.search_events;
+create policy "Escrita via service role"
+  on public.search_events
+  for insert
+  with check (true);

@@ -93,6 +93,37 @@ Nota: o caractere `—` também aparece como valor de fallback visual no `Proced
 
 ---
 
+## Status de implementação (2026-08-12, Story 1.2)
+
+Implementado nesta sessão, sem dependências externas ausentes:
+
+| Item | Status | Nota |
+|---|---|---|
+| 2.2 Rate limiting | ✅ Feito | `src/lib/rate-limit.js`, aplicado em `/api/chat`, `/api/search`, `/api/auth/login` |
+| 2.4 Controle de acesso | ✅ Feito (opt-in) | `src/middleware.js` + `/login`; só protege de verdade depois que `SITE_PASSWORD` for configurada no Vercel |
+| 5.3/5.4 Formatação + sem travessão | ✅ Feito (Story 1.1) | — |
+| 5.2 Copiar código/nome isolados | ✅ Feito (Story 1.1) | — |
+| 1.2 Busca full-text (parcial) | ✅ Feito (interino) | Usa `to_tsvector('portuguese', ...)` já indexado; **não é busca semântica por embeddings** — isso segue bloqueado (ver abaixo) |
+| 3.3 Mensagem de capítulo não coberto | ✅ Feito | `/api/search` retorna `coveredChapters`, UI monta a mensagem |
+| 3.1 Feedback thumbs up/down | ✅ Feito (código) — ⚠️ Migration pendente | Precisa rodar seção 10 de `supabase/schema.sql` no SQL Editor |
+| 1.4 Analytics de buscas sem resultado | ✅ Feito (código) — ⚠️ Migration pendente | Precisa rodar seção 11 de `supabase/schema.sql` no SQL Editor |
+| 2.1 Testes automatizados | ✅ Feito | `vitest`, 20 testes, `npm test` |
+| 2.3 CI/CD | ✅ Feito | `.github/workflows/ci.yml` (lint + test + build) |
+
+**Ação pendente do usuário para ativar 100% do que foi implementado:**
+1. Rodar as seções 10 e 11 de `supabase/schema.sql` no SQL Editor do Supabase (tabelas `chat_feedback` e `search_events`)
+2. Configurar `SITE_PASSWORD` nas variáveis de ambiente de produção (Vercel) para o controle de acesso passar a valer
+
+Bloqueado por insumo externo (não é falta de esforço de código):
+
+| Item | Bloqueio | O que resolve |
+|---|---|---|
+| 1.1 Expansão para todos os capítulos da CBHPM | Não há PDFs-fonte dos Capítulos 4+ no repositório | Usuário fornecer os PDFs oficiais dos capítulos restantes |
+| Busca semântica de verdade (embeddings) | Groq não oferece endpoint de embeddings; nenhum provedor de embeddings está configurado | Decisão de provedor (ex: OpenAI, Cohere, Voyage) + API key |
+| 1.3 Importador administrável | Fora do sprint imediato por decisão de sequenciamento (só compensa com mais tração) | Decisão de priorização, não é bloqueio técnico |
+
+---
+
 ## Sequenciamento recomendado (revisado)
 
 **Sprint imediato (produção já está em uso — risco ativo, não hipotético):**

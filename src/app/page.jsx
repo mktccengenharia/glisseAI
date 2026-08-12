@@ -1,6 +1,6 @@
 "use client"
 import React, { useState, useRef, useCallback } from 'react'
-import { LucideSend, LucideClipboard, LucideCheck, LucideChevronDown } from 'lucide-react'
+import { LucideSend, LucideClipboard, LucideCheck, LucideChevronDown, LucideThumbsUp, LucideThumbsDown } from 'lucide-react'
 
 // ─── Utilitários ───────────────────────────────────────────────────────────
 
@@ -211,6 +211,48 @@ function ProcedureCard({ item }) {
   )
 }
 
+// ─── Feedback da Resposta (útil / não útil) ───────────────────────────────
+
+function FeedbackButtons({ messageId, query }) {
+  const [sent, setSent] = useState(null)
+
+  const sendFeedback = async (rating) => {
+    if (sent) return
+    setSent(rating)
+    try {
+      await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId, query, rating }),
+      })
+    } catch {
+      // Best-effort: não interrompe a experiência se o envio falhar
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-1 mt-2">
+      <button
+        onClick={() => sendFeedback('up')}
+        disabled={!!sent}
+        title="Resposta útil"
+        className="p-1.5 rounded-lg hover:bg-gray-50 disabled:hover:bg-transparent transition-colors"
+      >
+        <LucideThumbsUp className={`w-3.5 h-3.5 ${sent === 'up' ? 'text-black' : 'text-gray-300'}`} />
+      </button>
+      <button
+        onClick={() => sendFeedback('down')}
+        disabled={!!sent}
+        title="Resposta não útil"
+        className="p-1.5 rounded-lg hover:bg-gray-50 disabled:hover:bg-transparent transition-colors"
+      >
+        <LucideThumbsDown className={`w-3.5 h-3.5 ${sent === 'down' ? 'text-black' : 'text-gray-300'}`} />
+      </button>
+      {sent && <span className="text-[10px] text-gray-400">Obrigado pelo feedback</span>}
+    </div>
+  )
+}
+
 // ─── Sugestões de Busca Rápida ────────────────────────────────────────────
 
 const QUICK_SUGGESTIONS = [
@@ -268,9 +310,11 @@ export default function GlisseAI() {
       const procedures = searchData.results || []
 
       if (procedures.length === 0) {
+        const chapters = (searchData.coveredChapters || []).join(', ')
         setMessages(prev => [...prev, {
+          id: crypto.randomUUID(),
           role: 'bot',
-          text: `Nenhum procedimento encontrado para "${query}". Tente buscar por palavras-chave parciais ou verifique se o código está correto.`,
+          text: `Nenhum procedimento encontrado para "${query}". Pode ser um termo/código que não existe na CBHPM, ou pode ser de um capítulo que ainda não importamos${chapters ? ` (hoje cobrimos os Capítulos ${chapters})` : ''}. Tente palavras-chave parciais ou confira o código.`,
           cards: []
         }])
         return
@@ -285,9 +329,12 @@ export default function GlisseAI() {
       const chatData = await chatRes.json()
 
       setMessages(prev => [...prev, {
+        id: crypto.randomUUID(),
         role: 'bot',
         text: chatData.text || 'Resultado encontrado.',
-        cards: procedures
+        cards: procedures,
+        feedbackEligible: true,
+        query
       }])
 
     } catch (err) {
@@ -431,6 +478,9 @@ export default function GlisseAI() {
                         <ProcedureCard key={ci} item={card} />
                       ))}
                     </div>
+                  )}
+                  {msg.feedbackEligible && (
+                    <FeedbackButtons messageId={msg.id} query={msg.query} />
                   )}
                 </div>
               )}
