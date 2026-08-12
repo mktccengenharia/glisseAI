@@ -63,8 +63,12 @@ export async function GET(request) {
   // Detecta se é busca por código (padrão numérico com pontos/hífens)
   const isCodeSearch = /^[\d\.\-]+$/.test(term)
 
+  // Exclui explicitamente "embedding" (384 números por linha, não usado pela
+  // UI) para não trafegar esse volume entre o banco e a função à toa.
+  const SELECT_COLUMNS = 'id, codigo, procedimento, porte, valor_porte, uco, valor_uco, anestesia, versao, observacao, created_at, capitulo, numero_auxiliares, porte_anestesico, custo_operacional, valor_versao, aux_pct'
+
   function baseQuery() {
-    let q = supabase.from('cbhpm_procedures').select('*')
+    let q = supabase.from('cbhpm_procedures').select(SELECT_COLUMNS)
     if (version !== 'ALL') q = q.eq('versao', version)
     return q
   }
@@ -119,7 +123,9 @@ export async function GET(request) {
     return Response.json({ error: 'Erro ao buscar no banco de dados' }, { status: 500 })
   }
 
-  const results = data || []
+  // Nunca devolver o vetor de embedding ao client: são 384 números por linha
+  // (vários KB por resultado) que a UI não usa para nada.
+  const results = (data || []).map(({ embedding, ...rest }) => rest)
   if (results.length === 0) {
     await logEmptySearch(supabase, { term, version, isCodeSearch })
   }
