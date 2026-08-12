@@ -34,6 +34,8 @@ Este mapeamento cruza três fontes: (1) o que o PRD v1.0.0 prometeu, (2) o que e
 | 2.3 | **Sem CI/CD** — nenhum pipeline automatizado valida build/lint antes de merge. | Sem `.github/workflows` | **Médio** — cada `git push` para `main` vai direto para produção sem gate automático (o merge fast-forward desta sessão, por exemplo, não passou por nenhum check). | Baixo (GitHub Actions: lint + build) | **Médio** |
 | 2.4 | **Nenhum controle de acesso** — app está publicamente acessível sem autenticação, apesar do NFR do PRD pedir "acesso corporativo restrito". | Sem middleware de auth, sem página de login | **Médio-Alto** — depende de onde a URL de produção é exposta; se pública, dados de precificação interna do hospital/operadora ficam visíveis a qualquer um com o link. | Médio (SSO corporativo ou senha simples + Vercel password protection como paliativo) | **Alto** (se a URL já é pública) |
 
+> **Atualização 2026-08-12:** um gate de senha simples foi implementado e testado na Story 1.2, e em seguida removido a pedido explícito do stakeholder — decisão de manter a URL aberta. O risco descrito acima permanece real e é aceito conscientemente; não é mais tratado como pendência de implementação.
+
 ---
 
 ## 3. Produto e experiência do usuário
@@ -100,7 +102,7 @@ Implementado nesta sessão, sem dependências externas ausentes:
 | Item | Status | Nota |
 |---|---|---|
 | 2.2 Rate limiting | ✅ Feito | `src/lib/rate-limit.js`, aplicado em `/api/chat`, `/api/search`, `/api/auth/login` |
-| 2.4 Controle de acesso | ✅ Feito (opt-in) | `src/middleware.js` + `/login`; só protege de verdade depois que `SITE_PASSWORD` for configurada no Vercel |
+| 2.4 Controle de acesso | ❌ Revertido a pedido do usuário (2026-08-12) | Implementado e testado, depois removido: decisão explícita de manter a URL aberta. Risco de exposição de dados de precificação segue registrado e aceito conscientemente pelo stakeholder |
 | 5.3/5.4 Formatação + sem travessão | ✅ Feito (Story 1.1) | — |
 | 5.2 Copiar código/nome isolados | ✅ Feito (Story 1.1) | — |
 | 1.2 Busca full-text (parcial) | ✅ Feito (interino) | Usa `to_tsvector('portuguese', ...)` já indexado; **não é busca semântica por embeddings** — isso segue bloqueado (ver abaixo) |
@@ -112,7 +114,6 @@ Implementado nesta sessão, sem dependências externas ausentes:
 
 **Ação pendente do usuário para ativar 100% do que foi implementado:**
 1. Rodar as seções 10 e 11 de `supabase/schema.sql` no SQL Editor do Supabase (tabelas `chat_feedback` e `search_events`)
-2. Configurar `SITE_PASSWORD` nas variáveis de ambiente de produção (Vercel) para o controle de acesso passar a valer
 
 Bloqueado por insumo externo (não é falta de esforço de código):
 
