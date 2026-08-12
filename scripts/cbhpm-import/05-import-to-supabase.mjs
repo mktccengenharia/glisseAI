@@ -50,8 +50,13 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 const records = JSON.parse(fs.readFileSync(path.join(OUT_DIR, 'cbhpm-2018-cap3.json'), 'utf8'))
 const porteData = JSON.parse(fs.readFileSync(path.join(OUT_DIR, 'porte-2020-2021.json'), 'utf8'))
 
-const completos = records.filter((r) => !r.fonteIncompleta)
-console.log(`Registros a importar (excluindo fonteIncompleta): ${completos.length} de ${records.length}`)
+// Importa todos os registros parseados, inclusive os "fonteIncompleta" (porte
+// determinado, mas aux/anest/custo ausentes na fonte — muitos são casos onde o
+// conceito de auxiliar/porte anestésico genuinamente não se aplica, ex:
+// procedimentos extracorpóreos, não é falha de extração). O RAG e a UI já
+// tratam null como "não consta na fonte", nunca como 0 — seguro importar.
+const completos = records
+console.log(`Registros a importar: ${completos.length} de ${records.length}`)
 
 async function main() {
   // 1) cbhpm_versoes
