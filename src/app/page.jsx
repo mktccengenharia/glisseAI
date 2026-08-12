@@ -310,11 +310,10 @@ export default function GlisseAI() {
       const procedures = searchData.results || []
 
       if (procedures.length === 0) {
-        const chapters = (searchData.coveredChapters || []).join(', ')
         setMessages(prev => [...prev, {
           id: crypto.randomUUID(),
           role: 'bot',
-          text: `Nenhum procedimento encontrado para "${query}". Pode ser um termo/código que não existe na CBHPM, ou pode ser de um capítulo que ainda não importamos${chapters ? ` (hoje cobrimos os Capítulos ${chapters})` : ''}. Tente palavras-chave parciais ou confira o código.`,
+          text: `Nenhum procedimento encontrado para "${query}". Cobrimos todos os capítulos da CBHPM — pode ser um termo/código que não existe na tabela, ou que não está presente na edição selecionada. Tente palavras-chave parciais ou confira o código.`,
           cards: []
         }])
         return

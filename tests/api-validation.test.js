@@ -63,7 +63,7 @@ describe('/api/search — validação de input', () => {
     const res = await GET(getRequest('http://localhost/api/search?q=a', { 'x-forwarded-for': '2.2.2.1' }))
     const data = await res.json()
     expect(data.results).toEqual([])
-    expect(data.coveredChapters).toEqual(['1', '2', '3'])
+    expect(data.coveredChapters).toEqual(['1', '2', '3', '4'])
   })
 
   it('retorna 500 quando variáveis do Supabase estão ausentes', async () => {

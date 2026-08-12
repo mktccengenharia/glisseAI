@@ -19,6 +19,8 @@ Este mapeamento cruza três fontes: (1) o que o PRD v1.0.0 prometeu, (2) o que e
 | # | Oportunidade | Evidência | Impacto | Esforço | Prioridade |
 |---|---|---|---|---|---|
 | 1.1 | **Cobertura de dados incompleta** — apenas Capítulos 1, 2 e 3 da CBHPM foram parseados e importados. A tabela CBHPM tem mais capítulos (procedimentos clínicos, exames complementares etc.) que hoje não existem no banco. | `scripts/cbhpm-import/lib/` só tem `parse-cap1/2/3.mjs`; `parse-cap3.mjs` trata "CAPÍTULO 4" apenas como delimitador de fim, não como conteúdo a extrair. | **Alto** — usuário busca um procedimento fora do Cap. 1-3 e o sistema simplesmente não encontra, sem sinalizar "capítulo ainda não importado" (parece bug, não limitação conhecida). Mina a confiança do setor de cobrança logo na adoção. | Médio (replicar padrão dos parsers existentes por capítulo) | **Alto** |
+
+> **Atualização 2026-08-12 (Story 1.4):** resolvido por completo. A CBHPM tem só 4 capítulos no total (confirmado no próprio texto-fonte, não havia "Capítulo 5" a descobrir) — Capítulo 4 (Procedimentos Diagnósticos e Terapêuticos) foi parseado e importado nas 7 edições depois que o usuário forneceu os PDFs-fonte. Foi mais complexo que os Capítulos 1-3: o Capítulo 4 tem 6 esquemas de coluna diferentes por subseção (ECG/exames simples = 2 colunas; endoscopia = +auxiliar; procedimentos invasivos = +auxiliar+anestésico igual ao Cap. 3; Radiologia = +custo de filme+incidências; Medicina Nuclear = +custo de filme+UR). Exigiu extração via `pdftotext -table` em vez de `-layout` (que desalinhava porte/valor entre linhas) e 3 colunas novas no schema (`custo_filme_doc`, `numero_incidencias`, `unidade_radiofarmaco`). "UR" (Unidade de Radiofármaco) quase sempre aparece como `*` na fonte — confirmado no texto da própria CBHPM que isso remete a uma tabela de preços EXTERNA do Colégio Brasileiro de Radiologia, não a um valor presente no documento; gravado como texto bruto, nunca inventado.
 | 1.2 | **Busca é 100% textual (`ILIKE`), não híbrida** — FR-01 do PRD pede busca estruturada + semântica com embeddings/fuzzy match; hoje é regex + `ILIKE` sobre `codigo`/`procedimento`. | `src/app/api/search/route.js` | **Alto** — termos técnicos parciais, sinônimos ou erros de digitação do faturista não retornam nada. É a segunda user story do PRD ("busca com minhas próprias palavras") e não está atendida. | Médio-Alto (pgvector + embeddings, ou fuzzy search com `pg_trgm` como passo intermediário mais barato) | **Alto** |
 
 > **Atualização 2026-08-12 (Story 1.2 + 1.3):** resolvido em duas camadas — full-text search em português (índice já existente) e busca semântica com embeddings open source (`Xenova/multilingual-e5-small`, rodando localmente, sem API externa). Falta só aplicar a migration e rodar o backfill (ver seção de status abaixo).
@@ -114,16 +116,16 @@ Implementado nesta sessão, sem dependências externas ausentes:
 | 1.4 Analytics de buscas sem resultado | ✅ Feito (código) — ⚠️ Migration pendente | Precisa rodar seção 11 de `supabase/schema.sql` no SQL Editor |
 | 2.1 Testes automatizados | ✅ Feito | `vitest`, 20 testes, `npm test` |
 | 2.3 CI/CD | ✅ Feito | `.github/workflows/ci.yml` (lint + test + build) |
+| 1.1 Cobertura completa da CBHPM (Capítulo 4) | ✅ Feito e ativo em produção (Story 1.4) | Usuário forneceu os PDFs-fonte (`C:\...\tabelas_cbhpm\`). Confirmado: a CBHPM só tem 4 capítulos no total — cobertura agora é 100%. 13.682 procedimentos do Capítulo 4 importados nas 7 edições (94,3% com porte determinado; o resto entrou como stub pesquisável, mesmo padrão já usado no Cap. 3). Banco: 30.584 procedimentos no total |
 
 **Ação pendente do usuário para ativar 100% do que foi implementado:**
-1. Rodar as seções 10 e 11 de `supabase/schema.sql` no SQL Editor do Supabase (tabelas `chat_feedback` e `search_events`) — busca semântica (seção 12) já está aplicada e ativa desde 2026-08-12
+1. Rodar as seções 10 e 11 de `supabase/schema.sql` no SQL Editor do Supabase (tabelas `chat_feedback` e `search_events`) — busca semântica (seção 12) e cobertura do Capítulo 4 (seção 13) já estão aplicadas e ativas desde 2026-08-12
 
-Bloqueado por insumo externo (não é falta de esforço de código):
+Fora do sprint por decisão de sequenciamento (não é bloqueio técnico):
 
-| Item | Bloqueio | O que resolve |
-|---|---|---|
-| 1.1 Expansão para todos os capítulos da CBHPM | Não há PDFs-fonte dos Capítulos 4+ no repositório | Usuário fornecer os PDFs oficiais dos capítulos restantes |
-| 1.3 Importador administrável | Fora do sprint imediato por decisão de sequenciamento (só compensa com mais tração) | Decisão de priorização, não é bloqueio técnico |
+| Item | Motivo |
+|---|---|
+| 1.3 Importador administrável | Só compensa com mais tração de novas edições — decisão de priorização, não bloqueio |
 
 ---
 

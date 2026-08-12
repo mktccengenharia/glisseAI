@@ -177,3 +177,23 @@ as $$
   order by embedding <=> query_embedding
   limit match_count
 $$;
+
+-- 13. Campos específicos dos grupos de Radiologia/Medicina Nuclear do
+--     Capítulo 4 (Métodos Diagnósticos por Imagem / Medicina Nuclear), que
+--     não existem em nenhum capítulo já importado. Definições confirmadas
+--     no próprio texto-fonte da CBHPM (seção "INSTRUÇÕES ESPECÍFICAS PARA
+--     MEDICINA NUCLEAR" e nomes de procedimento auto-consistentes com a
+--     contagem de incidências, ex: "RX – Crânio – 3 incidências" -> 3):
+--       - custo_filme_doc: consumo de filmes radiográficos ou documentação
+--         (grupos Radiologia e Medicina Nuclear)
+--       - numero_incidencias: nº de incidências/tomadas radiográficas
+--         (grupo Radiologia)
+--       - unidade_radiofarmaco: "UR" (Unidade de Radiofármaco) — quase
+--         sempre aparece como "*" na fonte, remetendo a uma tabela de
+--         preços EXTERNA do Colégio Brasileiro de Radiologia, não a um
+--         valor numérico presente neste documento. Guardado como texto para
+--         preservar fielmente o que a fonte mostra (não inventar um número).
+alter table public.cbhpm_procedures
+  add column if not exists custo_filme_doc     numeric(10,4),
+  add column if not exists numero_incidencias  smallint,
+  add column if not exists unidade_radiofarmaco text;

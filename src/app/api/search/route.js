@@ -5,10 +5,12 @@ import { createClient } from '@supabase/supabase-js'
 import { rateLimit } from '@/lib/rate-limit'
 import { embedQuery } from '@/lib/embeddings'
 
-// Capítulos com dados importados hoje (ver scripts/cbhpm-import/). Usado para
-// distinguir, numa busca sem resultado, "não existe na CBHPM" de "capítulo
-// ainda não coberto pelo pipeline de importação" — ver docs/opportunity-mapping.md item 3.3.
-export const COVERED_CHAPTERS = ['1', '2', '3']
+// Capítulos com dados importados hoje (ver scripts/cbhpm-import/). A CBHPM
+// tem só 4 capítulos no total (confirmado no texto-fonte) — cobertura
+// completa desde 2026-08-12. Usado para distinguir, numa busca sem
+// resultado, "não existe na CBHPM" de "capítulo ainda não coberto" — ver
+// docs/opportunity-mapping.md item 3.3.
+export const COVERED_CHAPTERS = ['1', '2', '3', '4']
 
 // Best-effort: loga buscas sem resultado para orientar a priorização de
 // expansão de capítulos com dado real de uso (docs/opportunity-mapping.md item 1.4).
