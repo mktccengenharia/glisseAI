@@ -12,6 +12,18 @@ import { embedQuery } from '@/lib/embeddings'
 // docs/opportunity-mapping.md item 3.3.
 export const COVERED_CHAPTERS = ['1', '2', '3', '4']
 
+// Códigos CBHPM têm sempre 8 dígitos no formato D.DD.DD.DD-D. Se o usuário
+// colar/digitar o código só com números (sem pontuação — comum ao copiar de
+// outro sistema), comparar o texto puro contra "codigo" (salvo formatado)
+// nunca bate — ex: "30913012" nunca encontra "3.09.13.01-2". Reconstrói a
+// pontuação só nesse caso específico e inequívoco (exatamente 8 dígitos);
+// para outras quantidades de dígitos, mantém o termo original (substring),
+// para não mudar buscas parciais mais curtas de forma inesperada.
+export function normalizeCodigoSearchTerm(term) {
+  if (!/^\d{8}$/.test(term)) return term
+  return `${term[0]}.${term.slice(1, 3)}.${term.slice(3, 5)}.${term.slice(5, 7)}-${term[7]}`
+}
+
 // Best-effort: loga buscas sem resultado para orientar a priorização de
 // expansão de capítulos com dado real de uso (docs/opportunity-mapping.md item 1.4).
 // Não bloqueia nem falha a busca se a tabela search_events ainda não existir
@@ -65,6 +77,8 @@ export async function GET(request) {
   // Detecta se é busca por código (padrão numérico com pontos/hífens)
   const isCodeSearch = /^[\d\.\-]+$/.test(term)
 
+  const searchTerm = isCodeSearch ? normalizeCodigoSearchTerm(term) : term
+
   // Exclui explicitamente "embedding" (384 números por linha, não usado pela
   // UI) para não trafegar esse volume entre o banco e a função à toa.
   const SELECT_COLUMNS = 'id, codigo, procedimento, porte, valor_porte, uco, valor_uco, anestesia, versao, observacao, created_at, capitulo, numero_auxiliares, porte_anestesico, custo_operacional, valor_versao, aux_pct'
@@ -78,7 +92,7 @@ export async function GET(request) {
   let data, error
 
   if (isCodeSearch) {
-    ;({ data, error } = await baseQuery().ilike('codigo', `%${term}%`).limit(10))
+    ;({ data, error } = await baseQuery().ilike('codigo', `%${searchTerm}%`).limit(10))
   } else {
     // Full-text search em português (usa o índice GIN já existente sobre
     // to_tsvector('portuguese', procedimento)) — tolera termos parciais fora
