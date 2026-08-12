@@ -94,15 +94,20 @@ function VersionSelector({ versions, selectedVersion, onChange }) {
 // ─── Componente de Cartão de Procedimento ─────────────────────────────────
 
 function ProcedureCard({ item }) {
-  const [copied, setCopied] = useState(false)
+  const [copiedField, setCopiedField] = useState(null)
 
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(
-      `Código: ${item.codigo || item.code} | Procedimento: ${item.procedimento || item.name} | Porte: ${item.porte || item.port}`
-    )
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  const copyField = (field, text) => {
+    navigator.clipboard.writeText(text)
+    setCopiedField(field)
+    setTimeout(() => setCopiedField((current) => (current === field ? null : current)), 2000)
   }
+
+  const copyCode = () => copyField('codigo', item.codigo || item.code || '')
+  const copyName = () => copyField('procedimento', item.procedimento || item.name || '')
+  const copyToClipboard = () => copyField(
+    'tudo',
+    `Código: ${item.codigo || item.code} | Procedimento: ${item.procedimento || item.name} | Porte: ${item.porte || item.port}`
+  )
 
   const fmt = (val) => (val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
@@ -168,15 +173,38 @@ function ProcedureCard({ item }) {
         <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-2">Versão</p>
         <div className="flex items-center justify-between">
           <p className="text-xs text-gray-500">{versao}</p>
-          <button
-            onClick={copyToClipboard}
-            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-black transition-colors py-1 px-2 rounded-lg hover:bg-gray-50"
-          >
-            {copied
-              ? <><LucideCheck className="w-3 h-3 text-black" /> Copiado</>
-              : <><LucideClipboard className="w-3 h-3" /> Copiar</>
-            }
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={copyCode}
+              title="Copiar apenas o código"
+              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-black transition-colors py-1 px-2 rounded-lg hover:bg-gray-50"
+            >
+              {copiedField === 'codigo'
+                ? <><LucideCheck className="w-3 h-3 text-black" /> Copiado</>
+                : <><LucideClipboard className="w-3 h-3" /> Código</>
+              }
+            </button>
+            <button
+              onClick={copyName}
+              title="Copiar apenas o nome do procedimento"
+              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-black transition-colors py-1 px-2 rounded-lg hover:bg-gray-50"
+            >
+              {copiedField === 'procedimento'
+                ? <><LucideCheck className="w-3 h-3 text-black" /> Copiado</>
+                : <><LucideClipboard className="w-3 h-3" /> Nome</>
+              }
+            </button>
+            <button
+              onClick={copyToClipboard}
+              title="Copiar código, procedimento e porte"
+              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-black transition-colors py-1 px-2 rounded-lg hover:bg-gray-50"
+            >
+              {copiedField === 'tudo'
+                ? <><LucideCheck className="w-3 h-3 text-black" /> Copiado</>
+                : <><LucideClipboard className="w-3 h-3" /> Tudo</>
+              }
+            </button>
+          </div>
         </div>
       </div>
     </div>
