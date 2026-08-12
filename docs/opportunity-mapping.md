@@ -20,6 +20,8 @@ Este mapeamento cruza três fontes: (1) o que o PRD v1.0.0 prometeu, (2) o que e
 |---|---|---|---|---|---|
 | 1.1 | **Cobertura de dados incompleta** — apenas Capítulos 1, 2 e 3 da CBHPM foram parseados e importados. A tabela CBHPM tem mais capítulos (procedimentos clínicos, exames complementares etc.) que hoje não existem no banco. | `scripts/cbhpm-import/lib/` só tem `parse-cap1/2/3.mjs`; `parse-cap3.mjs` trata "CAPÍTULO 4" apenas como delimitador de fim, não como conteúdo a extrair. | **Alto** — usuário busca um procedimento fora do Cap. 1-3 e o sistema simplesmente não encontra, sem sinalizar "capítulo ainda não importado" (parece bug, não limitação conhecida). Mina a confiança do setor de cobrança logo na adoção. | Médio (replicar padrão dos parsers existentes por capítulo) | **Alto** |
 | 1.2 | **Busca é 100% textual (`ILIKE`), não híbrida** — FR-01 do PRD pede busca estruturada + semântica com embeddings/fuzzy match; hoje é regex + `ILIKE` sobre `codigo`/`procedimento`. | `src/app/api/search/route.js` | **Alto** — termos técnicos parciais, sinônimos ou erros de digitação do faturista não retornam nada. É a segunda user story do PRD ("busca com minhas próprias palavras") e não está atendida. | Médio-Alto (pgvector + embeddings, ou fuzzy search com `pg_trgm` como passo intermediário mais barato) | **Alto** |
+
+> **Atualização 2026-08-12 (Story 1.2 + 1.3):** resolvido em duas camadas — full-text search em português (índice já existente) e busca semântica com embeddings open source (`Xenova/multilingual-e5-small`, rodando localmente, sem API externa). Falta só aplicar a migration e rodar o backfill (ver seção de status abaixo).
 | 1.3 | **Sem importador administrável (FR-05)** — carga de novas edições é uma pipeline de 10 scripts CLI numerados, com gate humano manual (`APPROVED.txt`), sem UI. | `scripts/cbhpm-import/01-*.mjs` a `10-*.mjs` | **Médio** — funcional para quem já sabe rodar Node, mas não escala para "Gestor de Cobrança" (persona do PRD) atualizar tabelas sozinho. | Alto (UI de upload + validação) | **Médio** — só vale a pena se o ritmo de novas edições justificar |
 | 1.4 | **Nenhuma métrica de sucesso está instrumentada** — PRD define metas (tempo médio de consulta, taxa de erro, adoção) mas não há como medi-las hoje. | Sem analytics/logging estruturado em `package.json`; único log é `console.error` pontual | **Alto** — impossível provar que o produto entrega os 80% de ganho de produtividade prometido, ou saber se a adoção está de fato em 100% em 2 semanas. | Baixo (Vercel Analytics/PostHog + eventos de busca) | **Alto** |
 
@@ -105,7 +107,8 @@ Implementado nesta sessão, sem dependências externas ausentes:
 | 2.4 Controle de acesso | ❌ Revertido a pedido do usuário (2026-08-12) | Implementado e testado, depois removido: decisão explícita de manter a URL aberta. Risco de exposição de dados de precificação segue registrado e aceito conscientemente pelo stakeholder |
 | 5.3/5.4 Formatação + sem travessão | ✅ Feito (Story 1.1) | — |
 | 5.2 Copiar código/nome isolados | ✅ Feito (Story 1.1) | — |
-| 1.2 Busca full-text (parcial) | ✅ Feito (interino) | Usa `to_tsvector('portuguese', ...)` já indexado; **não é busca semântica por embeddings** — isso segue bloqueado (ver abaixo) |
+| 1.2 Busca full-text (parcial) | ✅ Feito (Story 1.2) | Usa `to_tsvector('portuguese', ...)` já indexado |
+| 1.2/5.1 Busca semântica (embeddings) | ✅ Feito (Story 1.3) — ⚠️ Migration + backfill pendentes | `Xenova/multilingual-e5-small` via `@huggingface/transformers`, rodando localmente na função serverless (sem API externa, sem custo por chamada). Fallback quando full-text/ILIKE não encontram nada. Ver seção 12 de `supabase/schema.sql` |
 | 3.3 Mensagem de capítulo não coberto | ✅ Feito | `/api/search` retorna `coveredChapters`, UI monta a mensagem |
 | 3.1 Feedback thumbs up/down | ✅ Feito (código) — ⚠️ Migration pendente | Precisa rodar seção 10 de `supabase/schema.sql` no SQL Editor |
 | 1.4 Analytics de buscas sem resultado | ✅ Feito (código) — ⚠️ Migration pendente | Precisa rodar seção 11 de `supabase/schema.sql` no SQL Editor |
@@ -113,14 +116,14 @@ Implementado nesta sessão, sem dependências externas ausentes:
 | 2.3 CI/CD | ✅ Feito | `.github/workflows/ci.yml` (lint + test + build) |
 
 **Ação pendente do usuário para ativar 100% do que foi implementado:**
-1. Rodar as seções 10 e 11 de `supabase/schema.sql` no SQL Editor do Supabase (tabelas `chat_feedback` e `search_events`)
+1. Rodar as seções 10, 11 e 12 de `supabase/schema.sql` no SQL Editor do Supabase (tabelas `chat_feedback`, `search_events`, extensão `vector` + coluna `embedding` + RPC de busca semântica)
+2. Rodar `node scripts/cbhpm-import/11-generate-embeddings.mjs` para popular os embeddings dos procedimentos já importados
 
 Bloqueado por insumo externo (não é falta de esforço de código):
 
 | Item | Bloqueio | O que resolve |
 |---|---|---|
 | 1.1 Expansão para todos os capítulos da CBHPM | Não há PDFs-fonte dos Capítulos 4+ no repositório | Usuário fornecer os PDFs oficiais dos capítulos restantes |
-| Busca semântica de verdade (embeddings) | Groq não oferece endpoint de embeddings; nenhum provedor de embeddings está configurado | Decisão de provedor (ex: OpenAI, Cohere, Voyage) + API key |
 | 1.3 Importador administrável | Fora do sprint imediato por decisão de sequenciamento (só compensa com mais tração) | Decisão de priorização, não é bloqueio técnico |
 
 ---

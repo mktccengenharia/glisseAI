@@ -140,3 +140,40 @@ create policy "Escrita via service role"
   on public.search_events
   for insert
   with check (true);
+
+-- 12. Busca semântica com embeddings open source (rodados localmente via
+--     @huggingface/transformers, sem API externa — ver src/lib/embeddings.js
+--     e scripts/cbhpm-import/11-generate-embeddings.mjs).
+--     APLICAR MANUALMENTE no SQL Editor do Supabase. Depois de aplicar,
+--     rodar `node scripts/cbhpm-import/11-generate-embeddings.mjs` para
+--     popular a coluna embedding dos procedimentos já importados.
+create extension if not exists vector;
+
+alter table public.cbhpm_procedures
+  add column if not exists embedding vector(384);
+
+-- ivfflat funciona melhor depois que a tabela já tem dados; se a busca
+-- vetorial ficar lenta após o backfill, rodar `analyze cbhpm_procedures;`
+-- ou recriar o índice com um `lists` ajustado ao volume real de linhas.
+create index if not exists idx_cbhpm_embedding
+  on public.cbhpm_procedures
+  using ivfflat (embedding vector_cosine_ops)
+  with (lists = 100);
+
+-- RPC chamável via supabase-js (.rpc('match_cbhpm_procedures', {...})) —
+-- REST/PostgREST não expõe operadores de distância vetorial diretamente.
+create or replace function public.match_cbhpm_procedures(
+  query_embedding vector(384),
+  match_count int default 10,
+  filter_versao text default null
+)
+returns setof public.cbhpm_procedures
+language sql stable
+as $$
+  select *
+  from public.cbhpm_procedures
+  where embedding is not null
+    and (filter_versao is null or versao = filter_versao)
+  order by embedding <=> query_embedding
+  limit match_count
+$$;

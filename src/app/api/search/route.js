@@ -3,6 +3,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { rateLimit } from '@/lib/rate-limit'
+import { embedQuery } from '@/lib/embeddings'
 
 // Capítulos com dados importados hoje (ver scripts/cbhpm-import/). Usado para
 // distinguir, numa busca sem resultado, "não existe na CBHPM" de "capítulo
@@ -85,6 +86,31 @@ export async function GET(request) {
     // (ex: prefixo de palavra). Mantém o comportamento anterior como rede de segurança.
     if (!error && (!data || data.length === 0)) {
       ;({ data, error } = await baseQuery().ilike('procedimento', `%${term}%`).limit(10))
+    }
+
+    // Busca semântica (embeddings open source, rodados localmente — ver
+    // src/lib/embeddings.js): último recurso quando nem full-text nem ILIKE
+    // encontram nada. Cobre sinônimos e termos técnicos que não compartilham
+    // nenhuma palavra literal com o texto do procedimento (ex: "tirar
+    // próstata" → "RTU de Próstata"). Best-effort: se a coluna/RPC ainda não
+    // existir (migration da seção 12 de supabase/schema.sql pendente) ou o
+    // modelo falhar ao carregar, não derruba a busca — só não encontra nada.
+    if (!error && (!data || data.length === 0)) {
+      try {
+        const queryEmbedding = await embedQuery(term)
+        const { data: semanticData, error: semanticError } = await supabase.rpc('match_cbhpm_procedures', {
+          query_embedding: queryEmbedding,
+          match_count: 10,
+          filter_versao: version !== 'ALL' ? version : null,
+        })
+        if (semanticError) {
+          console.error('Busca semântica indisponível (migration aplicada?):', semanticError.message)
+        } else if (semanticData) {
+          data = semanticData
+        }
+      } catch (semanticErr) {
+        console.error('Busca semântica indisponível (migration aplicada? modelo carregou?):', semanticErr.message)
+      }
     }
   }
 
