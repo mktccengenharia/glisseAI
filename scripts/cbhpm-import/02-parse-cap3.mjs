@@ -211,13 +211,41 @@ for (let i = 0; i < body.length; i++) {
   }
 
   if (!parsed) {
-    parseErrors.push({ codigo, linha: chapterStart + i + 1, textoBruto: restStart })
+    // Sem porte determinável nem com lookahead. Ainda assim, se o texto bruto
+    // parece uma descrição de procedimento real (não é outro código, não é
+    // fragmento truncado começando com parênteses/minúscula, tamanho plausível),
+    // registramos como stub pesquisável (código + nome, tudo o mais null) em vez
+    // de descartar. Texto que parece corrompido/fragmento fica de fora mesmo.
+    const candidato = restStart.trim()
+    const pareceDescricaoReal =
+      candidato.length >= 4 &&
+      !CODE_RE.test(candidato) && // não é "outro código" solto (referência a código antigo)
+      /^[A-ZÀ-Ú]/.test(candidato) && // começa com maiúscula (nome de procedimento real)
+      !/^[\(\)]/.test(candidato) // não começa com parêntese (fragmento/nota de rodapé)
+
+    if (pareceDescricaoReal) {
+      records.push({
+        codigo,
+        procedimento: candidato.replace(/\s+/g, ' ').trim(),
+        secao: currentSecao,
+        capitulo: '3 - Procedimentos Cirúrgicos e Invasivos',
+        porte: null,
+        custo_operacional: null,
+        numero_auxiliares: null,
+        porte_anestesico: null,
+        fonteIncompleta: true,
+        semPorte: true, // nem o porte foi determinado (diferente dos demais fonteIncompleta)
+        versao: 'CBHPM 2018',
+        wasWrapped: false,
+        linhaOrigem: chapterStart + i + 1,
+      })
+    } else {
+      parseErrors.push({ codigo, linha: chapterStart + i + 1, textoBruto: restStart })
+    }
     continue
   }
 
-  if (parsed) {
-    i = wasWrapped ? j - 1 : i // avança o cursor principal se consumimos linhas de lookahead
-  }
+  i = wasWrapped ? j - 1 : i // avança o cursor principal se consumimos linhas de lookahead
 
   records.push({
     codigo,
@@ -229,6 +257,7 @@ for (let i = 0; i < body.length; i++) {
     numero_auxiliares: parsed.numero_auxiliares,
     porte_anestesico: parsed.porte_anestesico,
     fonteIncompleta: parsed.fonteIncompleta,
+    semPorte: false,
     versao: 'CBHPM 2018',
     wasWrapped,
     linhaOrigem: chapterStart + i + 1,
@@ -251,6 +280,7 @@ const report = {
   totalRegistrosParseados: records.length,
   totalWrapped: records.filter((r) => r.wasWrapped).length,
   totalFonteIncompleta: records.filter((r) => r.fonteIncompleta).length,
+  totalSemPorte: records.filter((r) => r.semPorte).length,
   totalParseErrors: parseErrors.length,
   totalNotesSkipped: notesSkipped.length,
   totalDuplicates: duplicates.length,
