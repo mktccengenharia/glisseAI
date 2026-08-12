@@ -121,10 +121,23 @@ export async function GET(request) {
       .limit(10))
 
     // Fallback: termos muito curtos/atípicos podem não gerar tsquery útil,
-    // ou o termo pode ser uma substring que a busca full-text não pega
-    // (ex: prefixo de palavra). Mantém o comportamento anterior como rede de segurança.
+    // ou o termo pode ser uma substring que a busca full-text não pega (ex:
+    // prefixo de palavra), ou tem acentuação diferente do texto salvo (ex:
+    // "dissecçao" vs "Dissecção" — full-text 'portuguese' não ignora acento).
+    // Usa a RPC com unaccent (seção 14 de supabase/schema.sql); se a
+    // migration ainda não foi aplicada, cai para o ILIKE simples anterior.
     if (!error && (!data || data.length === 0)) {
-      ;({ data, error } = await baseQuery().ilike('procedimento', `%${term}%`).limit(10))
+      const { data: unaccentData, error: unaccentError } = await supabase.rpc('search_cbhpm_procedures_unaccent', {
+        search_term: term,
+        filter_versao: version !== 'ALL' ? version : null,
+        match_count: 10,
+      })
+      if (unaccentError) {
+        console.error('Busca sem acento indisponível (migration aplicada?):', unaccentError.message)
+        ;({ data, error } = await baseQuery().ilike('procedimento', `%${term}%`).limit(10))
+      } else {
+        data = unaccentData
+      }
     }
 
     // Busca semântica (embeddings open source, rodados localmente — ver

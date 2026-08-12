@@ -1,6 +1,6 @@
 "use client"
 import React, { useState, useRef, useCallback } from 'react'
-import { LucideSend, LucideClipboard, LucideCheck, LucideChevronDown, LucideThumbsUp, LucideThumbsDown } from 'lucide-react'
+import { LucideSend, LucideClipboard, LucideCheck, LucideChevronDown, LucideThumbsUp, LucideThumbsDown, LucideArrowLeft } from 'lucide-react'
 
 // ─── Utilitários ───────────────────────────────────────────────────────────
 
@@ -74,7 +74,7 @@ function VersionSelector({ versions, selectedVersion, onChange }) {
       </button>
 
       {open && (
-        <div className="absolute left-0 mt-1.5 w-52 bg-white border border-gray-100 rounded-xl shadow-lg z-50 overflow-hidden">
+        <div className="absolute left-0 mt-1.5 w-52 max-h-64 overflow-y-auto bg-white border border-gray-100 rounded-xl shadow-lg z-50">
           {versions.map((v) => (
             <button
               key={v}
@@ -111,13 +111,13 @@ function ProcedureCard({ item }) {
 
   const fmt = (val) => (val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-  const codigo = item.codigo || item.code || '—'
-  const procedimento = item.procedimento || item.name || '—'
-  const porte = item.porte || item.port || '—'
-  const uco = item.uco || '—'
+  const codigo = item.codigo || item.code || '-'
+  const procedimento = item.procedimento || item.name || '-'
+  const porte = item.porte || item.port || '-'
+  const uco = item.uco || '-'
   const valorPorte = item.valorPorteR$ || item.valor_porte || 0
   const valorUco = item.valorUcoR$ || item.valor_uco || 0
-  const versao = item.versao || '—'
+  const versao = item.versao || '-'
   const anestesia = item.anestesia || '0'
   // null = não consta na fonte (não é o mesmo que 0) — nunca usar `|| 0` aqui
   const numeroAuxiliares = item.numero_auxiliares ?? null
@@ -155,13 +155,13 @@ function ProcedureCard({ item }) {
               <p className="text-sm font-medium text-gray-400">Não consta na fonte</p>
             )}
             {numeroAuxiliares === 0 && (
-              <p className="text-sm font-medium text-black">0 — não paga auxiliar</p>
+              <p className="text-sm font-medium text-black">0 (não paga auxiliar)</p>
             )}
             {numeroAuxiliares > 0 && (
               <ul className="text-sm text-black space-y-0.5">
                 {Array.from({ length: numeroAuxiliares }, (_, j) => (
                   <li key={j}>
-                    {j + 1}º auxiliar — {AUX_PCT[j] * 100}% · {fmt(valorPorte * AUX_PCT[j])}
+                    {j + 1}º auxiliar · {AUX_PCT[j] * 100}% · {fmt(valorPorte * AUX_PCT[j])}
                   </li>
                 ))}
               </ul>
@@ -293,6 +293,12 @@ export default function GlisseAI() {
     }
   }, [messages])
 
+  const handleExitChat = useCallback(() => {
+    setMessages([])
+    setInputValue('')
+    setHasStarted(false)
+  }, [])
+
   const handleSend = useCallback(async (queryOverride) => {
     const query = typeof queryOverride === 'string' ? queryOverride : inputValue.trim()
     if (!query || isLoading) return
@@ -313,7 +319,7 @@ export default function GlisseAI() {
         setMessages(prev => [...prev, {
           id: crypto.randomUUID(),
           role: 'bot',
-          text: `Nenhum procedimento encontrado para "${query}". Cobrimos todos os capítulos da CBHPM — pode ser um termo/código que não existe na tabela, ou que não está presente na edição selecionada. Tente palavras-chave parciais ou confira o código.`,
+          text: `Nenhum procedimento encontrado para "${query}". Cobrimos todos os capítulos da CBHPM: pode ser um termo/código que não existe na tabela, ou que não está presente na edição selecionada. Tente palavras-chave parciais ou confira o código.`,
           cards: []
         }])
         return
@@ -436,12 +442,21 @@ export default function GlisseAI() {
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 bg-white border-b border-gray-100 z-10">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-          <h1
-            style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}
-            className="text-xl font-light tracking-tight text-black"
-          >
-            Glisse AI
-          </h1>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExitChat}
+              title="Voltar ao início"
+              className="flex items-center justify-center w-8 h-8 rounded-full text-gray-500 hover:text-black hover:bg-gray-50 transition-colors"
+            >
+              <LucideArrowLeft className="w-4 h-4" />
+            </button>
+            <h1
+              style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}
+              className="text-xl font-light tracking-tight text-black"
+            >
+              Glisse AI
+            </h1>
+          </div>
           <VersionSelector
             versions={versions}
             selectedVersion={selectedVersion}

@@ -197,3 +197,25 @@ alter table public.cbhpm_procedures
   add column if not exists custo_filme_doc     numeric(10,4),
   add column if not exists numero_incidencias  smallint,
   add column if not exists unidade_radiofarmaco text;
+
+-- 14. Busca tolerante a acento (ex: "dissecçao" também encontra
+--     "Dissecção"). A busca full-text ('portuguese') e o ILIKE simples
+--     comparam os bytes exatos e falham quando o usuário digita sem
+--     acentuação — comum ao digitar rápido no celular. Usa a extensão
+--     unaccent (já habilitada na seção 1). APLICAR MANUALMENTE no SQL
+--     Editor do Supabase — enquanto não aplicada, /api/search cai de volta
+--     no ILIKE simples anterior (best-effort, não quebra a busca).
+create or replace function public.search_cbhpm_procedures_unaccent(
+  search_term text,
+  filter_versao text default null,
+  match_count int default 10
+)
+returns setof public.cbhpm_procedures
+language sql stable
+as $$
+  select *
+  from public.cbhpm_procedures
+  where (filter_versao is null or versao = filter_versao)
+    and unaccent(procedimento) ilike '%' || unaccent(search_term) || '%'
+  limit match_count
+$$;
