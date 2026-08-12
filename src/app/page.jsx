@@ -186,10 +186,10 @@ function ProcedureCard({ item }) {
 // ─── Sugestões de Busca Rápida ────────────────────────────────────────────
 
 const QUICK_SUGGESTIONS = [
-  'RTU de Próstata',
   'Consulta em Consultório',
-  'Ultrassom Abdominal',
-  'Ressonância Magnética',
+  'Visita hospitalar',
+  'RTU de Próstata',
+  'Holter de 24 horas',
 ]
 
 // ─── Página Principal ─────────────────────────────────────────────────────
@@ -197,12 +197,25 @@ const QUICK_SUGGESTIONS = [
 export default function GlisseAI() {
   const [messages, setMessages] = useState([])
   const [inputValue, setInputValue] = useState('')
-  const [versions] = useState(['ALL'])
+  const [versions, setVersions] = useState(['ALL'])
   const [selectedVersion, setSelectedVersion] = useState('ALL')
   const [hasStarted, setHasStarted] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
   const scrollRef = useRef(null)
+  const inputRef = useRef(null)
+
+  // Carrega versões disponíveis do banco
+  React.useEffect(() => {
+    fetch('/api/versions')
+      .then(res => res.json())
+      .then(data => {
+        if (data.versions && data.versions.length > 0) {
+          setVersions(['ALL', ...data.versions])
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   React.useEffect(() => {
     if (scrollRef.current) {
@@ -268,16 +281,18 @@ export default function GlisseAI() {
     }
   }
 
-  // ── Input Bar (reutilizado em home e chat) ──────────────────────────────
-  const InputBar = ({ autoFocus = false }) => (
+  // ── Input Bar (inline JSX, NÃO como sub-componente, para evitar
+  //    re-mount e perda de foco a cada re-render) ──────────────────────────
+  const renderInputBar = (autoFocus = false) => (
     <div className="relative flex items-center">
-      <Input
+      <input
+        ref={inputRef}
         value={inputValue}
         onChange={e => setInputValue(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Digite o código ou procedimento..."
         autoFocus={autoFocus}
-        className="pr-12 pl-5 py-4 rounded-full border-gray-200 shadow-sm text-[15px]"
+        className="flex w-full border border-gray-200 bg-white pr-12 pl-5 py-4 rounded-full shadow-sm text-[15px] placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300"
       />
       <button
         onClick={() => handleSend()}
@@ -326,7 +341,7 @@ export default function GlisseAI() {
 
         {/* Input */}
         <div className="w-full max-w-xl mb-3">
-          <InputBar autoFocus />
+          {renderInputBar(true)}
         </div>
 
         {/* Seletor de Versão */}
@@ -413,7 +428,7 @@ export default function GlisseAI() {
       {/* Input fixo */}
       <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white to-transparent pt-8 pb-5 px-4">
         <div className="max-w-2xl mx-auto">
-          <InputBar />
+          {renderInputBar(false)}
           <p className="text-center text-[10px] text-gray-400 mt-2">
             Glisse AI pode cometer erros. Verifique os valores antes de faturar.
           </p>
