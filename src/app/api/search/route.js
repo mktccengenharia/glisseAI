@@ -43,20 +43,85 @@ export function normalizeCodigoSearchTerm(term) {
   return groups.reduce((acc, g, idx) => (idx === 0 ? g : `${acc}${SEPARATORS[idx - 1]}${g}`), '')
 }
 
-// Best-effort: loga buscas sem resultado para orientar a priorização de
-// expansão de capítulos com dado real de uso (docs/opportunity-mapping.md item 1.4).
-// Não bloqueia nem falha a busca se a tabela search_events ainda não existir
-// (migration em supabase/schema.sql, seção 10, precisa ser aplicada manualmente).
-async function logEmptySearch(supabase, { term, version, isCodeSearch }) {
+// Ramo da cascata de busca que produziu o resultado. Serve a dois propósitos:
+// rotular na UI o que veio do fallback semântico como aproximado (nunca por
+// limiar de similaridade — a RPC devolve `setof`, sem score) e registrar o
+// tipo real de match em search_events, base de calibração para o limiar futuro.
+export const MATCH_TYPES = {
+  CODIGO: 'codigo',
+  TEXTO: 'texto',
+  TEXTO_SEM_ACENTO: 'texto-sem-acento',
+  SEMANTICO: 'semantico',
+}
+
+// Conjunto único de campos devolvido ao frontend. Os quatro caminhos de busca
+// passam por aqui: código exato e full-text via `select`, as duas RPCs via
+// pickResultFields — as RPCs são `returns setof public.cbhpm_procedures` e
+// devolvem TODAS as colunas, então sem normalizar o mesmo procedimento chegava
+// à UI com conjuntos de campos diferentes conforme quem respondeu.
+// "embedding" fica de fora de propósito: são 384 números por linha que a UI
+// não usa e que não devem trafegar até o browser.
+export const RESULT_FIELDS = [
+  'id',
+  'codigo',
+  'procedimento',
+  'porte',
+  'valor_porte',
+  'uco',
+  'valor_uco',
+  'anestesia',
+  'versao',
+  'observacao',
+  'created_at',
+  'capitulo',
+  'numero_auxiliares',
+  'porte_anestesico',
+  'custo_operacional',
+  'custo_filme_doc',
+  'numero_incidencias',
+  'unidade_radiofarmaco',
+  'valor_versao',
+  'aux_pct',
+]
+
+const SELECT_COLUMNS = RESULT_FIELDS.join(', ')
+
+// Normaliza uma linha para exatamente RESULT_FIELDS. Campo ausente vira null
+// (não `undefined`), para que o JSON da resposta tenha o mesmo conjunto de
+// chaves nos quatro caminhos de busca.
+export function pickResultFields(row) {
+  const out = {}
+  for (const field of RESULT_FIELDS) {
+    out[field] = row?.[field] ?? null
+  }
+  return out
+}
+
+// Best-effort: loga TODA busca (com e sem resultado) para medir taxa real de
+// sucesso e orientar a priorização de expansão de capítulos com dado de uso
+// (docs/opportunity-mapping.md item 1.4).
+//
+// NÃO bloqueante de propósito: /api/search é a rota mais quente do produto e o
+// insert passou a ocorrer em toda busca, não só no ramo vazio (raro). Nenhum
+// `await` aqui — a resposta não espera o registro.
+//
+// Continua tolerando a ausência da tabela search_events (migration da seção 11
+// de supabase/schema.sql, aplicação manual ainda pendente): a busca funciona
+// normalmente enquanto a tabela não existir, só não registra nada.
+function logSearchEvent(supabase, { term, version, tipo, teveResultado }) {
   try {
-    await supabase.from('search_events').insert({
-      termo: term,
-      versao: version,
-      tipo: isCodeSearch ? 'codigo' : 'texto',
-      teve_resultado: false,
+    Promise.resolve(
+      supabase.from('search_events').insert({
+        termo: term,
+        versao: version,
+        tipo,
+        teve_resultado: teveResultado,
+      })
+    ).catch(() => {
+      // Tabela pode não existir ainda; não deve afetar a resposta da busca.
     })
   } catch {
-    // Tabela pode não existir ainda; não deve afetar a resposta da busca.
+    // Falha síncrona ao montar o insert também não pode derrubar a busca.
   }
 }
 
