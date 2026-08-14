@@ -45,8 +45,9 @@ export function normalizeCodigoSearchTerm(term) {
 
 // Ramo da cascata de busca que produziu o resultado. Serve a dois propósitos:
 // rotular na UI o que veio do fallback semântico como aproximado (nunca por
-// limiar de similaridade — a RPC devolve `setof`, sem score) e registrar o
-// tipo real de match em search_events, base de calibração para o limiar futuro.
+// limiar de similaridade — a RPC é `returns setof` e não devolve score, ver
+// Story 1.6 restrição 1) e registrar o tipo real de match em search_events,
+// que é a base de calibração para o limiar de uma story futura.
 export const MATCH_TYPES = {
   CODIGO: 'codigo',
   TEXTO: 'texto',
@@ -55,12 +56,12 @@ export const MATCH_TYPES = {
 }
 
 // Conjunto único de campos devolvido ao frontend. Os quatro caminhos de busca
-// passam por aqui: código exato e full-text via `select`, as duas RPCs via
+// convergem para ele: código exato e full-text via `select`, as duas RPCs via
 // pickResultFields — as RPCs são `returns setof public.cbhpm_procedures` e
-// devolvem TODAS as colunas, então sem normalizar o mesmo procedimento chegava
-// à UI com conjuntos de campos diferentes conforme quem respondeu.
-// "embedding" fica de fora de propósito: são 384 números por linha que a UI
-// não usa e que não devem trafegar até o browser.
+// devolvem TODAS as colunas, então, sem normalizar, o mesmo procedimento
+// chegava à UI com conjuntos de campos diferentes conforme quem respondeu.
+// "embedding" fica de fora de propósito: 384 números por linha (vários KB por
+// resultado) que a UI não usa e não devem trafegar até o browser.
 export const RESULT_FIELDS = [
   'id',
   'codigo',
@@ -97,17 +98,18 @@ export function pickResultFields(row) {
   return out
 }
 
-// Best-effort: loga TODA busca (com e sem resultado) para medir taxa real de
-// sucesso e orientar a priorização de expansão de capítulos com dado de uso
+// Best-effort: loga TODA busca (com e sem resultado) para medir a taxa real de
+// sucesso e orientar a priorização de expansão de cobertura com dado de uso
 // (docs/opportunity-mapping.md item 1.4).
 //
 // NÃO bloqueante de propósito: /api/search é a rota mais quente do produto e o
 // insert passou a ocorrer em toda busca, não só no ramo vazio (raro). Nenhum
 // `await` aqui — a resposta não espera o registro.
 //
-// Continua tolerando a ausência da tabela search_events (migration da seção 11
-// de supabase/schema.sql, aplicação manual ainda pendente): a busca funciona
-// normalmente enquanto a tabela não existir, só não registra nada.
+// Continua tolerando a ausência da tabela search_events (migration da SEÇÃO 11
+// de supabase/schema.sql, aplicação manual ainda pendente — a seção 10 é
+// chat_feedback): a busca funciona normalmente enquanto a tabela não existir,
+// só não registra nada.
 function logSearchEvent(supabase, { term, version, tipo, teveResultado }) {
   try {
     Promise.resolve(
@@ -153,7 +155,7 @@ export async function GET(request) {
   const version = searchParams.get('version') || 'ALL'
 
   if (typeof query !== 'string' || query.trim().length < 2) {
-    return Response.json({ results: [], coveredChapters: COVERED_CHAPTERS })
+    return Response.json({ results: [], matchType: null, coveredChapters: COVERED_CHAPTERS })
   }
 
   const term = query.trim().slice(0, 200)
@@ -163,20 +165,22 @@ export async function GET(request) {
 
   const searchTerm = isCodeSearch ? normalizeCodigoSearchTerm(term) : term
 
-  // Exclui explicitamente "embedding" (384 números por linha, não usado pela
-  // UI) para não trafegar esse volume entre o banco e a função à toa.
-  const SELECT_COLUMNS = 'id, codigo, procedimento, porte, valor_porte, uco, valor_uco, anestesia, versao, observacao, created_at, capitulo, numero_auxiliares, porte_anestesico, custo_operacional, valor_versao, aux_pct'
-
   function baseQuery() {
     let q = supabase.from('cbhpm_procedures').select(SELECT_COLUMNS)
     if (version !== 'ALL') q = q.eq('versao', version)
     return q
   }
 
+  const hasRows = (rows) => Array.isArray(rows) && rows.length > 0
+
   let data, error
+  // Qual ramo da cascata produziu o resultado. Fica null enquanto nenhum ramo
+  // devolveu linha (busca sem resultado).
+  let matchType = null
 
   if (isCodeSearch) {
     ;({ data, error } = await baseQuery().ilike('codigo', `%${searchTerm}%`).limit(10))
+    if (!error && hasRows(data)) matchType = MATCH_TYPES.CODIGO
   } else {
     // Full-text search em português (usa o índice GIN já existente sobre
     // to_tsvector('portuguese', procedimento)) — tolera termos parciais fora
@@ -184,6 +188,7 @@ export async function GET(request) {
     ;({ data, error } = await baseQuery()
       .textSearch('procedimento', term, { type: 'websearch', config: 'portuguese' })
       .limit(10))
+    if (!error && hasRows(data)) matchType = MATCH_TYPES.TEXTO
 
     // Fallback: termos muito curtos/atípicos podem não gerar tsquery útil,
     // ou o termo pode ser uma substring que a busca full-text não pega (ex:
@@ -203,6 +208,9 @@ export async function GET(request) {
       } else {
         data = unaccentData
       }
+      // O ILIKE degradado é o mesmo ramo do ponto de vista do usuário: match
+      // literal de texto, não aproximado. Só a RPC não estava disponível.
+      if (!error && hasRows(data)) matchType = MATCH_TYPES.TEXTO_SEM_ACENTO
     }
 
     // Busca semântica (embeddings open source, rodados localmente — ver
@@ -224,6 +232,10 @@ export async function GET(request) {
           console.error('Busca semântica indisponível (migration aplicada?):', semanticError.message)
         } else if (semanticData) {
           data = semanticData
+          // Único ramo que produz resultado APROXIMADO: a RPC ordena por
+          // distância vetorial e devolve as N mais próximas, por mais
+          // distantes que sejam. A UI precisa rotular isso ao faturista.
+          if (hasRows(data)) matchType = MATCH_TYPES.SEMANTICO
         }
       } catch (semanticErr) {
         console.error('Busca semântica indisponível (migration aplicada? modelo carregou?):', semanticErr.message)
@@ -236,12 +248,27 @@ export async function GET(request) {
     return Response.json({ error: 'Erro ao buscar no banco de dados' }, { status: 500 })
   }
 
-  // Nunca devolver o vetor de embedding ao client: são 384 números por linha
-  // (vários KB por resultado) que a UI não usa para nada.
-  const results = (data || []).map(({ embedding, ...rest }) => rest)
-  if (results.length === 0) {
-    await logEmptySearch(supabase, { term, version, isCodeSearch })
-  }
+  // Normaliza os quatro caminhos para o mesmo conjunto de campos. É também o
+  // que garante que "embedding" nunca chegue ao client pelas RPCs.
+  const results = (data || []).map(pickResultFields)
+  const teveResultado = results.length > 0
 
-  return Response.json({ results, coveredChapters: COVERED_CHAPTERS })
+  // Toda busca é registrada, não só a que voltou vazia. Sem `await`: a
+  // resposta não espera o insert.
+  logSearchEvent(supabase, {
+    term,
+    version,
+    // Sem resultado não há ramo de match; mantém o tipo base ('codigo'/'texto')
+    // que o log já usava, para não quebrar a leitura dos eventos antigos.
+    tipo: teveResultado ? matchType : isCodeSearch ? MATCH_TYPES.CODIGO : MATCH_TYPES.TEXTO,
+    teveResultado,
+  })
+
+  return Response.json({
+    results,
+    // Identifica o ramo que respondeu para a UI poder rotular o resultado do
+    // fallback semântico como aproximado (AC4). Nunca um score de similaridade.
+    matchType: teveResultado ? matchType : null,
+    coveredChapters: COVERED_CHAPTERS,
+  })
 }

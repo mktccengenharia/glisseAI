@@ -1,6 +1,18 @@
 "use client"
 import React, { useState, useRef, useCallback } from 'react'
 import { LucideSend, LucideClipboard, LucideCheck, LucideChevronDown, LucideThumbsUp, LucideThumbsDown, LucideArrowLeft } from 'lucide-react'
+import {
+  NAO_CONSTA,
+  formatValorBRL,
+  formatNumero,
+  isAusente,
+  camposCapitulo4Presentes,
+  resumoResultados,
+  isResultadoAproximado,
+  AVISO_RESULTADO_APROXIMADO,
+  SELO_RESULTADO_APROXIMADO,
+  MAX_CARDS_EXIBIDOS,
+} from '@/lib/procedure-display'
 
 // ─── Utilitários ───────────────────────────────────────────────────────────
 
@@ -93,7 +105,7 @@ function VersionSelector({ versions, selectedVersion, onChange }) {
 
 // ─── Componente de Cartão de Procedimento ─────────────────────────────────
 
-function ProcedureCard({ item }) {
+function ProcedureCard({ item, aproximado = false }) {
   const [copiedField, setCopiedField] = useState(null)
 
   const copyField = (field, text) => {
@@ -109,15 +121,20 @@ function ProcedureCard({ item }) {
     `Código: ${item.codigo || item.code} | Procedimento: ${item.procedimento || item.name} | Porte: ${item.porte || item.port}`
   )
 
-  const fmt = (val) => (val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-
   const codigo = item.codigo || item.code || '-'
   const procedimento = item.procedimento || item.name || '-'
   const porte = item.porte || item.port || '-'
-  const uco = item.uco || '-'
-  const valorPorte = item.valorPorteR$ || item.valor_porte || 0
-  const valorUco = item.valorUcoR$ || item.valor_uco || 0
+  // null/undefined = a fonte CBHPM não traz o valor para esse código, o que é
+  // DIFERENTE de zero. As coerções `|| 0` e `|| '-'` que existiam aqui
+  // transformavam ausência em "R$ 0,00" / "-", que numa ferramenta de
+  // faturamento é lido como "não paga" em vez de "não sei" (Story 1.6, AC1).
+  // `??` em vez de `||` também nos aliases: um valor 0 legítimo não pode cair
+  // para o campo seguinte.
+  const uco = item.uco ?? null
+  const valorPorte = item.valorPorteR$ ?? item.valor_porte ?? null
+  const valorUco = item.valorUcoR$ ?? item.valor_uco ?? null
   const versao = item.versao || '-'
+  const camposCap4 = camposCapitulo4Presentes(item)
   const anestesia = item.anestesia || '0'
   // null = não consta na fonte (não é o mesmo que 0) — nunca usar `|| 0` aqui
   const numeroAuxiliares = item.numero_auxiliares ?? null
@@ -129,6 +146,11 @@ function ProcedureCard({ item }) {
   return (
     <div className="mt-3 border border-gray-100 rounded-2xl overflow-hidden bg-white shadow-sm">
       <div className="px-4 pt-4 pb-3">
+        {aproximado && (
+          <p className="inline-block mb-2 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-[10px] font-medium uppercase tracking-wider text-amber-700">
+            {SELO_RESULTADO_APROXIMADO}
+          </p>
+        )}
         <p className="font-semibold text-[15px] leading-snug text-black mb-4">{procedimento}</p>
         <div className="grid grid-cols-2 gap-x-4 gap-y-3">
           <div>
@@ -137,11 +159,27 @@ function ProcedureCard({ item }) {
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-0.5">Porte</p>
-            <p className="text-sm font-medium text-black">{porte} · {fmt(valorPorte)}</p>
+            {isAusente(valorPorte) ? (
+              <p className="text-sm font-medium text-black">
+                {porte} · <span className="text-gray-400">{NAO_CONSTA}</span>
+              </p>
+            ) : (
+              <p className="text-sm font-medium text-black">{porte} · {formatValorBRL(valorPorte)}</p>
+            )}
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-0.5">UCO</p>
-            <p className="text-sm font-medium text-black">{uco} · {fmt(valorUco)}</p>
+            {/* Quando nem o UCO nem o valor em R$ constam, uma frase só — repetir
+                "Não consta na fonte · Não consta na fonte" seria ruído. */}
+            {isAusente(uco) && isAusente(valorUco) ? (
+              <p className="text-sm font-medium text-gray-400">{NAO_CONSTA}</p>
+            ) : (
+              <p className="text-sm font-medium text-black">
+                <span className={isAusente(uco) ? 'text-gray-400' : undefined}>{formatNumero(uco)}</span>
+                {' · '}
+                <span className={isAusente(valorUco) ? 'text-gray-400' : undefined}>{formatValorBRL(valorUco)}</span>
+              </p>
+            )}
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-0.5">Porte Anestésico</p>
@@ -152,7 +190,7 @@ function ProcedureCard({ item }) {
           <div className="col-span-2">
             <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-0.5">Auxiliares de Cirurgia</p>
             {numeroAuxiliares === null && (
-              <p className="text-sm font-medium text-gray-400">Não consta na fonte</p>
+              <p className="text-sm font-medium text-gray-400">{NAO_CONSTA}</p>
             )}
             {numeroAuxiliares === 0 && (
               <p className="text-sm font-medium text-black">0 (não paga auxiliar)</p>
@@ -161,12 +199,27 @@ function ProcedureCard({ item }) {
               <ul className="text-sm text-black space-y-0.5">
                 {Array.from({ length: numeroAuxiliares }, (_, j) => (
                   <li key={j}>
-                    {j + 1}º auxiliar · {AUX_PCT[j] * 100}% · {fmt(valorPorte * AUX_PCT[j])}
+                    {/* Sem valor de porte não há como calcular o rateio: não
+                        inventar "R$ 0,00" (null * pct daria 0). */}
+                    {j + 1}º auxiliar · {AUX_PCT[j] * 100}% ·{' '}
+                    {isAusente(valorPorte) ? NAO_CONSTA : formatValorBRL(valorPorte * AUX_PCT[j])}
                   </li>
                 ))}
               </ul>
             )}
           </div>
+
+          {/* Campos de Radiologia / Medicina Nuclear (Capítulo 4). Política de
+              null diferente da dos valores em R$ acima, de propósito: aqui o
+              campo é OMITIDO quando ausente, porque só se aplica a esses
+              grupos — "Não consta" em todo procedimento viraria ruído. */}
+          {camposCap4.map((campo) => (
+            <div key={campo.key} className={campo.legenda ? 'col-span-2' : undefined}>
+              <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-0.5">{campo.label}</p>
+              <p className="text-sm font-medium text-black">{campo.value}</p>
+              {campo.legenda && <p className="text-[11px] text-gray-400 mt-0.5">{campo.legenda}</p>}
+            </div>
+          ))}
         </div>
       </div>
       <div className="px-4 pb-3 pt-1 border-t border-gray-50">
@@ -338,6 +391,9 @@ export default function GlisseAI() {
         role: 'bot',
         text: chatData.text || 'Resultado encontrado.',
         cards: procedures,
+        // Ramo da cascata que respondeu — a UI rotula como aproximado só o que
+        // veio do fallback semântico (ver /api/search).
+        matchType: searchData.matchType ?? null,
         feedbackEligible: true,
         query
       }])
@@ -488,8 +544,18 @@ export default function GlisseAI() {
                   />
                   {msg.cards && msg.cards.length > 0 && (
                     <div className="mt-2 space-y-3 max-w-md">
-                      {msg.cards.slice(0, 5).map((card, ci) => (
-                        <ProcedureCard key={ci} item={card} />
+                      {isResultadoAproximado(msg.matchType) && (
+                        <p className="text-xs leading-relaxed text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                          {AVISO_RESULTADO_APROXIMADO}
+                        </p>
+                      )}
+                      {/* Contagem explícita: a UI cortava em 5 os 10 que a API
+                          devolve e descartava metade em silêncio. */}
+                      {resumoResultados(msg.cards.length) && (
+                        <p className="text-xs text-gray-500">{resumoResultados(msg.cards.length)}</p>
+                      )}
+                      {msg.cards.slice(0, MAX_CARDS_EXIBIDOS).map((card, ci) => (
+                        <ProcedureCard key={ci} item={card} aproximado={isResultadoAproximado(msg.matchType)} />
                       ))}
                     </div>
                   )}

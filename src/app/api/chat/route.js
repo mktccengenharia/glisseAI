@@ -63,19 +63,45 @@ export async function POST(request) {
       return `  Porte Anestésico: ${p.porte_anestesico}${p.porte_anestesico === 0 ? ' (0 = não participação do anestesiologista)' : ''}`
     }
 
+    const ausente = (v) => v === null || v === undefined
+    const ausenteTexto = (v) => ausente(v) || (typeof v === 'string' && v.trim() === '')
+    const NAO_CONSTA = 'Não consta na fonte para este código (não informar um número, dizer que não há esse dado)'
+
+    // Campos exclusivos de Radiologia / Medicina Nuclear (Capítulo 4). Só
+    // entram no contexto quando a fonte trouxe o dado: mandar "não consta"
+    // para todo procedimento fora desses grupos é ruído que a LLM tende a
+    // repetir na resposta.
+    function capitulo4Lines(p) {
+      const linhas = []
+      // custo_operacional e custo_filme_doc são multiplicadores da fonte, não
+      // valores em reais — nunca formatar como R$ (Article IV).
+      if (!ausente(p.custo_operacional)) linhas.push(`  Custo Operacional: ${p.custo_operacional}`)
+      if (!ausente(p.custo_filme_doc)) linhas.push(`  Custo de Filme/Documentação: ${p.custo_filme_doc}`)
+      if (!ausente(p.numero_incidencias)) linhas.push(`  Nº de Incidências: ${p.numero_incidencias}`)
+      if (!ausenteTexto(p.unidade_radiofarmaco)) {
+        linhas.push(
+          `  Unidade de Radiofármaco (UR): ${p.unidade_radiofarmaco} ` +
+          '(reproduzir EXATAMENTE este símbolo; "*" significa que a fonte remete à tabela de preços do ' +
+          'Colégio Brasileiro de Radiologia, externa a esta tabela, e NÃO a um valor numérico ou em reais)'
+        )
+      }
+      return linhas.join('\n')
+    }
+
     // Monta o contexto preciso a partir dos dados da tabela CBHPM
-    const procedureContext = procedures.map((p, i) => `
-[${i + 1}] Procedimento: ${p.procedimento}
-  Código CBHPM: ${p.codigo}
-  Porte: ${p.porte}
-  Valor do Porte: ${typeof p.valor_porte === 'number' ? formatR$(p.valor_porte) : 'não informado'}
-${auxiliaresLine(p)}
-${porteAnestesicoLine(p)}
-  UCO: ${p.uco ?? 'não informado'}
-  Valor UCO: ${typeof p.valor_uco === 'number' ? formatR$(p.valor_uco) : 'não informado'}
-  Versão da Tabela: ${p.versao}${p.valor_versao ? ` (valores de porte da vigência ${p.valor_versao})` : ''}
-  ${p.observacao ? `Observação: ${p.observacao}` : ''}
-`).join('\n')
+    const procedureContext = procedures.map((p, i) => [
+      `[${i + 1}] Procedimento: ${p.procedimento}`,
+      `  Código CBHPM: ${p.codigo}`,
+      `  Porte: ${p.porte}`,
+      `  Valor do Porte: ${typeof p.valor_porte === 'number' ? formatR$(p.valor_porte) : NAO_CONSTA}`,
+      auxiliaresLine(p),
+      porteAnestesicoLine(p),
+      `  UCO: ${ausente(p.uco) ? NAO_CONSTA : p.uco}`,
+      `  Valor UCO: ${typeof p.valor_uco === 'number' ? formatR$(p.valor_uco) : NAO_CONSTA}`,
+      capitulo4Lines(p),
+      `  Versão da Tabela: ${p.versao}${p.valor_versao ? ` (valores de porte da vigência ${p.valor_versao})` : ''}`,
+      p.observacao ? `  Observação: ${p.observacao}` : '',
+    ].filter(Boolean).join('\n')).join('\n\n')
 
     const systemPrompt = `Você é o Glisse AI, um assistente especializado em cobranças médicas brasileiras.
 Você tem acesso aos dados exatos da tabela CBHPM. Sua função é apresentar essas informações de forma clara e precisa.
@@ -92,6 +118,8 @@ REGRAS ABSOLUTAS:
 - Se houver mais de um resultado, liste todos de forma clara
 - Nunca use o caractere travessão (—); prefira vírgula, ponto ou frases curtas
 - Estruture a resposta: quando houver mais de um procedimento, apresente cada um em um bloco ou item de lista separado (código, porte e valor em linhas próprias), nunca em texto corrido misturando vários procedimentos no mesmo parágrafo
+
+REGRA DE UNIDADE DE RADIOFÁRMACO (UR), quando o campo aparecer no contexto: reproduza o símbolo exatamente como está (normalmente "*"). Ele remete a uma tabela de preços do Colégio Brasileiro de Radiologia, externa a esta base. NUNCA converta em reais, nunca estime um número, nunca diga que o valor é zero.
 
 REGRA DE AUXILIARES DE CIRURGIA (Normas Gerais da CBHPM, item 5): o percentual de rateio muda por edição da tabela (algumas usam 60/40/30/30, outras 30/20/20/20) — os percentuais e valores em R$ de cada auxiliar já vêm calculados corretamente no contexto abaixo para a edição correta, apenas reproduza.
 
