@@ -206,18 +206,22 @@ function parseTail(text, schema) {
   } else if (isM2) {
     // DEFEITO DE EXTRAÇÃO EXCLUSIVO DA 3ª EDIÇÃO (cabeçalho traz "M2" — não
     // ocorre nas outras 6 edições, confirmado por grep em todas as fontes).
-    // Ordem real das 4 colunas, confirmada com o usuário em 2026-08-17
-    // comparando com o nome do procedimento (ex: "Crânio - 2 incidências"
-    // tem 1º valor = 2) e com o valor de porte no banco (4A = R$ 120 bate
-    // com a tabela de valores; a ordem padrão do resto do capítulo colocava
-    // esse mesmo "4A" na 3ª posição, nunca lido):
-    //   [0] Inc./UR (campo real, extraFields[0])
-    //   [1] Custo Operacional
-    //   [2] Porte (sempre com letra 1A-14C)
-    //   [3] coluna "M2" — descartada de propósito, sem uso conhecido no cálculo
+    // Cabeçalho quebrado em 2 linhas ("Filme Porte Custo" / "Inc. M2 Oper.");
+    // medindo a posição exata de coluna (não a ordem visual aproximada) contra
+    // a linha de dados, e CONFIRMADO com o usuário em 2026-08-17 (ele corrigiu
+    // uma leitura anterior errada desse mesmo parser onde custo_operacional
+    // estava lendo a coluna "M2" por engano):
+    //   [0] Inc./UR (campo real, extraFields[0]) — bate com o nome do
+    //       procedimento (ex: "Crânio - 2 incidências" tem 1º valor = 2)
+    //   [1] coluna "Filme"/"M2" — descartada de propósito, sem uso conhecido
+    //       no cálculo (confirmado com o usuário)
+    //   [2] Porte (sempre com letra 1A-14C; 4A = R$ 120 bate com a tabela de
+    //       valores — a ordem padrão do resto do capítulo colocava esse
+    //       mesmo "4A" na 1ª posição, nunca lido)
+    //   [3] Custo Operacional — alinhado com o cabeçalho "Custo"/"Oper."
     const [fieldName] = extraFields
     result.porte = parsePorte(values[2])
-    result.custo_operacional = parseDecimal(values[1])
+    result.custo_operacional = parseDecimal(values[3])
     result[fieldName] = FIELD_PARSERS[fieldName](values[0])
     camposPreenchidos = extraFields
   } else {
@@ -272,7 +276,22 @@ export function parseEdition(raw, versaoLabel) {
 
     const headerMatch = HEADER_LINE_RE.exec(line.trim())
     if (headerMatch) {
-      const key = headerMatch[1].trim().replace(/\s+/g, ' ')
+      let key = headerMatch[1].trim().replace(/\s+/g, ' ')
+      // O cabeçalho de coluna às vezes quebra em uma 2ª linha física que NÃO
+      // começa com "Código" (ex: CBHPM 2016, Capítulo 4: "Código Procedimento
+      // ... Custo Filme" seguido de uma linha só "Porte Oper. ou Doc. Incid."
+      // sem prefixo "Código"). Sem isso, detectSchema() só via "Custo Filme"
+      // — nenhuma palavra-chave reconhecida — e caía no schema mais simples
+      // (2 campos), fazendo a regex engolir os valores reais de porte/custo
+      // dentro da descrição do procedimento. Junta a linha seguinte quando
+      // ela parece continuação de cabeçalho (mesmas palavras-chave, mas não
+      // é código/seção/novo cabeçalho).
+      const nextLine = (body[i + 1] || '').trim()
+      if (nextLine && !CODE_RE.test(nextLine) && !SECTION_RE.test(nextLine) && !HEADER_LINE_RE.test(nextLine)
+        && /\b(Porte|Oper\.?|Aux\.?|Anest\.?|Inc(id)?\.?|UR|Doc\.?|Custo|Filme)\b/i.test(nextLine)) {
+        key = `${key} ${nextLine.replace(/\s+/g, ' ')}`.trim()
+        i++
+      }
       if (key) {
         activeSchema = detectSchema(key)
         unknownHeaders.push({ key, schemaDetectado: activeSchema, linha: chapterStart + i + 1 })
