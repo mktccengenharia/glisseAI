@@ -164,12 +164,27 @@ const FIELD_PARSERS = {
   unidade_radiofarmaco: parseRawText,
 }
 
+// Seção "RADIOLOGIA INTERVENCIONISTA I/II" da 3ª edição usa o MESMO cabeçalho
+// "_m2" da Radiologia Geral, mas com 6 valores por linha em vez de 4 — porte,
+// custo operacional, auxiliares e anestésico juntos, sem filme/doc nem
+// incidências (não aplicáveis a procedimentos intervencionistas). Confirmado
+// com o usuário em 2026-08-17: 97 linhas amostradas têm SEMPRE traço nas
+// posições 1, 2 e 4 (nenhum decimal de custo operacional aparece em toda a
+// seção — cobrada só por porte + auxiliar + anestesia) e porte sempre com
+// letra na posição 3, batendo com a tabela de valores.
+const M2_SIX_FIELD_ORDER = ['custo_filme_doc', 'numero_incidencias', 'porte', 'custo_operacional', 'numero_auxiliares', 'porte_anestesico']
+
 function parseTail(text, schema) {
   const trimmed = text.trim()
   const extraFields = SCHEMA_FIELDS[schema]
-  // Schemas "_m2" sempre têm 4 colunas de valor: 1 campo real (extraFields[0])
-  // + custo_operacional + porte + 1 coluna descartada — nunca 2+extraFields.length.
-  const fieldCount = M2_SCHEMAS.has(schema) ? 4 : 2 + extraFields.length
+  const isM2 = M2_SCHEMAS.has(schema)
+  // Schemas "_m2" só têm 2 formas validadas: 4 colunas (1 campo real +
+  // custo_operacional + porte + 1 coluna descartada) ou 6 colunas (ver
+  // M2_SIX_FIELD_ORDER). Qualquer outra contagem cai no fallback de "fonte
+  // incompleta" — nunca adivinhar uma forma não confirmada (Artigo IV).
+  const trailingCount = isM2 ? countTrailingFields(trimmed) : null
+  if (isM2 && trailingCount !== 4 && trailingCount !== 6) return null
+  const fieldCount = isM2 ? trailingCount : 2 + extraFields.length
   const m = tailRegexFor(fieldCount).exec(trimmed)
   if (!m) return null
 
@@ -178,43 +193,53 @@ function parseTail(text, schema) {
   const values = Object.keys(tailGroups).sort().map((k) => tailGroups[k])
 
   const result = { descricao: descricaoLimpa }
+  let camposPreenchidos
 
-  if (M2_SCHEMAS.has(schema)) {
+  if (isM2 && fieldCount === 6) {
+    M2_SIX_FIELD_ORDER.forEach((fieldName, idx) => {
+      const parser = fieldName === 'porte' ? parsePorte
+        : fieldName === 'custo_operacional' ? parseDecimal
+        : FIELD_PARSERS[fieldName]
+      result[fieldName] = parser(values[idx])
+    })
+    camposPreenchidos = ['numero_auxiliares', 'porte_anestesico', 'custo_filme_doc', 'numero_incidencias']
+  } else if (isM2) {
     // DEFEITO DE EXTRAÇÃO EXCLUSIVO DA 3ª EDIÇÃO (cabeçalho traz "M2" — não
     // ocorre nas outras 6 edições, confirmado por grep em todas as fontes).
-    // Ordem real das 4 colunas nessa seção, confirmada com o usuário em
-    // 2026-08-17 comparando com o nome do procedimento (ex: "Crânio - 2
-    // incidências" tem 1º valor = 2) e com o valor de porte no banco (4A =
-    // R$ 120 bate com a tabela de valores; a ordem padrão do resto do
-    // capítulo colocava esse mesmo "4A" na 3ª posição, nunca lido):
+    // Ordem real das 4 colunas, confirmada com o usuário em 2026-08-17
+    // comparando com o nome do procedimento (ex: "Crânio - 2 incidências"
+    // tem 1º valor = 2) e com o valor de porte no banco (4A = R$ 120 bate
+    // com a tabela de valores; a ordem padrão do resto do capítulo colocava
+    // esse mesmo "4A" na 3ª posição, nunca lido):
     //   [0] Inc./UR (campo real, extraFields[0])
     //   [1] Custo Operacional
     //   [2] Porte (sempre com letra 1A-14C)
     //   [3] coluna "M2" — descartada de propósito, sem uso conhecido no cálculo
-    //
-    // Só validado para linhas com EXATAMENTE 4 valores. Uma minoria (seção
-    // "RADIOLOGIA INTERVENCIONISTA") tem 6 valores na linha — forma NÃO
-    // confirmada com o usuário; nunca adivinhar aqui (Artigo IV), então essas
-    // linhas retornam null e caem no fallback padrão de "fonte incompleta"
-    // de parseEdition, igual a qualquer outro caso não reconhecido.
-    if (countTrailingFields(trimmed) !== 4) return null
     const [fieldName] = extraFields
     result.porte = parsePorte(values[2])
     result.custo_operacional = parseDecimal(values[1])
     result[fieldName] = FIELD_PARSERS[fieldName](values[0])
+    camposPreenchidos = extraFields
   } else {
     result.porte = parsePorte(values[0])
     result.custo_operacional = parseDecimal(values[1])
     extraFields.forEach((fieldName, idx) => {
       result[fieldName] = FIELD_PARSERS[fieldName](values[2 + idx])
     })
+    camposPreenchidos = extraFields
   }
 
   const camposNaoAplicaveis = ['numero_auxiliares', 'porte_anestesico', 'custo_filme_doc', 'numero_incidencias', 'unidade_radiofarmaco']
-    .filter((f) => !extraFields.includes(f))
+    .filter((f) => !camposPreenchidos.includes(f))
   for (const f of camposNaoAplicaveis) result[f] = null
 
-  result.fonteIncompleta = result.porte === null || result.custo_operacional === null
+  // Na forma de 6 colunas, custo_operacional é SEMPRE "–" na fonte (não é
+  // dado faltando — a seção inteira não usa UCO, só porte+aux+anestesia), então
+  // não deve marcar fonteIncompleta. Nas outras formas, ausência de porte ou
+  // custo_operacional continua sinalizando fonte incompleta normalmente.
+  result.fonteIncompleta = isM2 && fieldCount === 6
+    ? result.porte === null
+    : result.porte === null || result.custo_operacional === null
   return result
 }
 
