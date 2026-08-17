@@ -52,21 +52,53 @@ function findChapterContentStart(lines, headerPattern, codePattern, afterIndex, 
 // contra as 7 edições que a ORDEM das colunas no cabeçalho varia por PDF
 // (ex: "UR ou DOC. Porte Oper." na 2014 vs "Porte Oper. ou Doc. UR" na
 // 2018) e as abreviações também variam ("Inc." vs "Incid."). Testar
-// presença de palavra-chave, não posição, é robusto a ambos.
-// "M2" só aparece nos cabeçalhos da 3ª edição (confirmado: as outras 6
-// edições não têm essa palavra em nenhum cabeçalho de Capítulo 4) e marca um
-// defeito de extração exclusivo dela — ver schema *_m2 e o comentário em
-// parseTail. Não generalizar essa detecção para outras edições sem
-// confirmar a mesma inversão de coluna nelas.
-function detectSchema(headerText) {
-  const hasM2 = /\bM2\b/.test(headerText)
-  const hasUR = /\bUR\b/.test(headerText)
-  const hasIncid = /\bInc(id)?\.?\b/i.test(headerText)
-  const hasAux = /\bAux\.?\b/i.test(headerText)
-  const hasAnest = /\bAnest\.?\b/i.test(headerText)
+// presença de palavra-chave, não posição de LEITURA, é robusto para o NOME
+// do schema.
+//
+// Mas a ORDEM REAL dos valores na linha de dados NÃO segue a ordem de
+// leitura do texto — segue a POSIÇÃO DE COLUNA (offset de caractere) de cada
+// palavra, medida diretamente nas linhas originais do PDF (pdftotext -table
+// mantém alinhamento de coluna consistente entre linhas da mesma seção,
+// mesmo quando o cabeçalho quebra em 2 linhas físicas separadas). Colapsar
+// espaços e concatenar as linhas destrói essa informação — duas edições
+// (2016: seção Radiologia Geral vs. seção Medicina Nuclear/Oncologia) têm a
+// palavra "Porte" em posições de LEITURA diferentes (antes/depois de
+// "Código Procedimento") mas isso sozinho não diz qual é a ordem real dos
+// dados; só a coluna diz.
+//
+// Confirmado por medição de coluna (não estatística sobre valores — ver
+// histórico de 2026-08-17) em 3ª edição, 2008, 2010, 2014, 2016 e 2018: se a
+// coluna de "UR"/"Inc." fica ANTES da coluna de "Porte" (ou "Porte" nem
+// aparece em nenhuma das linhas do cabeçalho da seção — caso de 2008/3ª
+// edição), a ordem real dos 4 valores é [UR/Inc., coluna descartável sem uso
+// confirmado, Porte, Custo Operacional] — ver schemas "_invertido" e o
+// comentário em parseTail.
+//
+// headerLines: as linhas ORIGINAIS (sem trim/colapso) que compõem o
+// cabeçalho da seção — a linha "Código Procedimento ..." e qualquer linha de
+// continuação adjacente (antes ou depois) que carregue palavras de coluna.
+function detectSchema(headerLines) {
+  const colOffset = (re) => {
+    for (const line of headerLines) {
+      const idx = line.search(re)
+      if (idx >= 0) return idx
+    }
+    return -1
+  }
+  const idxPorte = colOffset(/\bPorte\b/i)
+  const idxUR = colOffset(/\bUR\b/)
+  const idxIncid = colOffset(/\bInc(id)?\.?\b/i)
+  const hasUR = idxUR >= 0
+  const hasIncid = idxIncid >= 0
+  const combined = headerLines.join(' ')
+  const hasAux = /\bAux\.?\b/i.test(combined)
+  const hasAnest = /\bAnest\.?\b/i.test(combined)
 
-  if (hasM2 && hasUR) return 'porte_oper_doc_ur_m2'
-  if (hasM2 && hasIncid) return 'porte_oper_doc_incid_m2'
+  const idxIncOuUR = hasUR ? idxUR : idxIncid
+  const invertido = idxIncOuUR >= 0 && (idxPorte === -1 || idxIncOuUR < idxPorte)
+
+  if (invertido && hasUR) return 'porte_oper_doc_ur_invertido'
+  if (invertido && hasIncid) return 'porte_oper_doc_incid_invertido'
   if (hasUR) return 'porte_oper_doc_ur'
   if (hasIncid) return 'porte_oper_doc_incid'
   if (hasAux && hasAnest) return 'porte_oper_aux_anest'
@@ -84,15 +116,15 @@ const SCHEMA_FIELDS = {
   porte_oper_aux_anest: ['numero_auxiliares', 'porte_anestesico'],
   porte_oper_doc_incid: ['custo_filme_doc', 'numero_incidencias'],
   porte_oper_doc_ur: ['custo_filme_doc', 'unidade_radiofarmaco'],
-  // Variantes "_m2": mesmas 4 colunas de valor de porte_oper_doc_incid/_ur,
+  // Variantes "_invertido": mesmas 4 colunas de valor de porte_oper_doc_incid/_ur,
   // mas em ORDEM DIFERENTE — ver comentário em parseTail. Só o 1º campo é
   // real; a 4ª coluna ("M2") é descartada de propósito (confirmado com o
   // usuário em 2026-08-17: não é usada em nenhum cálculo do produto).
-  porte_oper_doc_incid_m2: ['numero_incidencias'],
-  porte_oper_doc_ur_m2: ['unidade_radiofarmaco'],
+  porte_oper_doc_incid_invertido: ['numero_incidencias'],
+  porte_oper_doc_ur_invertido: ['unidade_radiofarmaco'],
 }
 
-const M2_SCHEMAS = new Set(['porte_oper_doc_incid_m2', 'porte_oper_doc_ur_m2'])
+const INVERTIDO_SCHEMAS = new Set(['porte_oper_doc_incid_invertido', 'porte_oper_doc_ur_invertido'])
 
 const HEADER_LINE_RE = /^C[óo]digo\s+Procedimento\s*(.*)$/
 const NOISE_PATTERNS = [
@@ -127,7 +159,7 @@ const SINGLE_FIELD_RE = new RegExp(`^${FIELD}$`)
 
 // Conta quantos tokens no FINAL da linha (da direita pra esquerda) são,
 // individualmente, um valor reconhecível (número, decimal, porte-com-letra,
-// "*" ou traço). Usado só pelos schemas "_m2" para distinguir a forma de
+// "*" ou traço). Usado só pelos schemas "_invertido" para distinguir a forma de
 // linha validada (exatamente 4 valores) de outras formas (ex: 6 valores em
 // "RADIOLOGIA INTERVENCIONISTA") que têm colunas extras não confirmadas —
 // ver parseTail.
@@ -165,26 +197,26 @@ const FIELD_PARSERS = {
 }
 
 // Seção "RADIOLOGIA INTERVENCIONISTA I/II" da 3ª edição usa o MESMO cabeçalho
-// "_m2" da Radiologia Geral, mas com 6 valores por linha em vez de 4 — porte,
+// "_invertido" da Radiologia Geral, mas com 6 valores por linha em vez de 4 — porte,
 // custo operacional, auxiliares e anestésico juntos, sem filme/doc nem
 // incidências (não aplicáveis a procedimentos intervencionistas). Confirmado
 // com o usuário em 2026-08-17: 97 linhas amostradas têm SEMPRE traço nas
 // posições 1, 2 e 4 (nenhum decimal de custo operacional aparece em toda a
 // seção — cobrada só por porte + auxiliar + anestesia) e porte sempre com
 // letra na posição 3, batendo com a tabela de valores.
-const M2_SIX_FIELD_ORDER = ['custo_filme_doc', 'numero_incidencias', 'porte', 'custo_operacional', 'numero_auxiliares', 'porte_anestesico']
+const INVERTIDO_SIX_FIELD_ORDER = ['custo_filme_doc', 'numero_incidencias', 'porte', 'custo_operacional', 'numero_auxiliares', 'porte_anestesico']
 
 function parseTail(text, schema) {
   const trimmed = text.trim()
   const extraFields = SCHEMA_FIELDS[schema]
-  const isM2 = M2_SCHEMAS.has(schema)
-  // Schemas "_m2" só têm 2 formas validadas: 4 colunas (1 campo real +
+  const isInvertido = INVERTIDO_SCHEMAS.has(schema)
+  // Schemas "_invertido" só têm 2 formas validadas: 4 colunas (1 campo real +
   // custo_operacional + porte + 1 coluna descartada) ou 6 colunas (ver
-  // M2_SIX_FIELD_ORDER). Qualquer outra contagem cai no fallback de "fonte
+  // INVERTIDO_SIX_FIELD_ORDER). Qualquer outra contagem cai no fallback de "fonte
   // incompleta" — nunca adivinhar uma forma não confirmada (Artigo IV).
-  const trailingCount = isM2 ? countTrailingFields(trimmed) : null
-  if (isM2 && trailingCount !== 4 && trailingCount !== 6) return null
-  const fieldCount = isM2 ? trailingCount : 2 + extraFields.length
+  const trailingCount = isInvertido ? countTrailingFields(trimmed) : null
+  if (isInvertido && trailingCount !== 4 && trailingCount !== 6) return null
+  const fieldCount = isInvertido ? trailingCount : 2 + extraFields.length
   const m = tailRegexFor(fieldCount).exec(trimmed)
   if (!m) return null
 
@@ -195,30 +227,36 @@ function parseTail(text, schema) {
   const result = { descricao: descricaoLimpa }
   let camposPreenchidos
 
-  if (isM2 && fieldCount === 6) {
-    M2_SIX_FIELD_ORDER.forEach((fieldName, idx) => {
+  if (isInvertido && fieldCount === 6) {
+    INVERTIDO_SIX_FIELD_ORDER.forEach((fieldName, idx) => {
       const parser = fieldName === 'porte' ? parsePorte
         : fieldName === 'custo_operacional' ? parseDecimal
         : FIELD_PARSERS[fieldName]
       result[fieldName] = parser(values[idx])
     })
     camposPreenchidos = ['numero_auxiliares', 'porte_anestesico', 'custo_filme_doc', 'numero_incidencias']
-  } else if (isM2) {
-    // DEFEITO DE EXTRAÇÃO EXCLUSIVO DA 3ª EDIÇÃO (cabeçalho traz "M2" — não
-    // ocorre nas outras 6 edições, confirmado por grep em todas as fontes).
-    // Cabeçalho quebrado em 2 linhas ("Filme Porte Custo" / "Inc. M2 Oper.");
-    // medindo a posição exata de coluna (não a ordem visual aproximada) contra
-    // a linha de dados, e CONFIRMADO com o usuário em 2026-08-17 (ele corrigiu
-    // uma leitura anterior errada desse mesmo parser onde custo_operacional
-    // estava lendo a coluna "M2" por engano):
+  } else if (isInvertido) {
+    // Ordem de coluna confirmada por medição exata de posição (não estatística
+    // sobre os valores) em 3ª edição, 2008, 2010 e 2014 — todas com o mesmo
+    // cabeçalho quebrado em 2 linhas ("Filme Porte Custo" / "Inc./UR ...
+    // Oper.", com "M2" ou "ou Doc." no lugar do descarte conforme a edição).
+    // CONFIRMADO com o usuário em 2026-08-17, inclusive uma correção de uma
+    // leitura errada anterior deste mesmo parser (custo_operacional estava
+    // lendo a coluna descartável por engano):
     //   [0] Inc./UR (campo real, extraFields[0]) — bate com o nome do
     //       procedimento (ex: "Crânio - 2 incidências" tem 1º valor = 2)
-    //   [1] coluna "Filme"/"M2" — descartada de propósito, sem uso conhecido
-    //       no cálculo (confirmado com o usuário)
+    //   [1] coluna descartável ("Filme"/"M2" ou "Filme"/"ou Doc.") — sem uso
+    //       conhecido no cálculo (confirmado com o usuário)
     //   [2] Porte (sempre com letra 1A-14C; 4A = R$ 120 bate com a tabela de
     //       valores — a ordem padrão do resto do capítulo colocava esse
     //       mesmo "4A" na 1ª posição, nunca lido)
-    //   [3] Custo Operacional — alinhado com o cabeçalho "Custo"/"Oper."
+    //   [3] Custo Operacional — alinhado com o cabeçalho "Custo"/"Oper.",
+    //       confirmado batendo entre 3ª edição e 2018 para o mesmo procedimento
+    //
+    // A forma de 6 colunas (INVERTIDO_SIX_FIELD_ORDER) só foi confirmada na
+    // seção "RADIOLOGIA INTERVENCIONISTA" da 3ª edição — se aparecer em
+    // outra edição, é aplicada pelo mesmo padrão posicional, mas SEM
+    // validação própria feita para essa edição.
     const [fieldName] = extraFields
     result.porte = parsePorte(values[2])
     result.custo_operacional = parseDecimal(values[3])
@@ -241,7 +279,7 @@ function parseTail(text, schema) {
   // dado faltando — a seção inteira não usa UCO, só porte+aux+anestesia), então
   // não deve marcar fonteIncompleta. Nas outras formas, ausência de porte ou
   // custo_operacional continua sinalizando fonte incompleta normalmente.
-  result.fonteIncompleta = isM2 && fieldCount === 6
+  result.fonteIncompleta = isInvertido && fieldCount === 6
     ? result.porte === null
     : result.porte === null || result.custo_operacional === null
   return result
@@ -276,24 +314,37 @@ export function parseEdition(raw, versaoLabel) {
 
     const headerMatch = HEADER_LINE_RE.exec(line.trim())
     if (headerMatch) {
-      let key = headerMatch[1].trim().replace(/\s+/g, ' ')
-      // O cabeçalho de coluna às vezes quebra em uma 2ª linha física que NÃO
-      // começa com "Código" (ex: CBHPM 2016, Capítulo 4: "Código Procedimento
-      // ... Custo Filme" seguido de uma linha só "Porte Oper. ou Doc. Incid."
-      // sem prefixo "Código"). Sem isso, detectSchema() só via "Custo Filme"
-      // — nenhuma palavra-chave reconhecida — e caía no schema mais simples
-      // (2 campos), fazendo a regex engolir os valores reais de porte/custo
-      // dentro da descrição do procedimento. Junta a linha seguinte quando
-      // ela parece continuação de cabeçalho (mesmas palavras-chave, mas não
-      // é código/seção/novo cabeçalho).
-      const nextLine = (body[i + 1] || '').trim()
-      if (nextLine && !CODE_RE.test(nextLine) && !SECTION_RE.test(nextLine) && !HEADER_LINE_RE.test(nextLine)
-        && /\b(Porte|Oper\.?|Aux\.?|Anest\.?|Inc(id)?\.?|UR|Doc\.?|Custo|Filme)\b/i.test(nextLine)) {
-        key = `${key} ${nextLine.replace(/\s+/g, ' ')}`.trim()
+      const key = headerMatch[1].trim().replace(/\s+/g, ' ')
+      const isHeaderFragment = (candidate) => candidate && !CODE_RE.test(candidate) && !SECTION_RE.test(candidate)
+        && !HEADER_LINE_RE.test(candidate) && /\b(Porte|Oper\.?|Aux\.?|Anest\.?|Inc(id)?\.?|UR|Doc\.?|Custo|Filme)\b/i.test(candidate)
+      // O cabeçalho de coluna às vezes quebra em uma linha física SEPARADA que
+      // não começa com "Código" — e essa linha pode vir ANTES ou DEPOIS da
+      // linha "Código Procedimento...", variando por seção dentro do MESMO
+      // PDF (confirmado: 2016 tem ambos os casos em capítulos diferentes).
+      // Ex. linha seguinte (2016, Radiologia Geral): "Código Procedimento ...
+      // Custo Filme" seguida de "Porte Oper. ou Doc. Incid." sem prefixo.
+      // Ex. linha anterior (2016, Medicina Nuclear/Oncologia): "Porte Custo
+      // Filme" antes de "Código Procedimento ... Oper. ou Doc. UR".
+      //
+      // IMPORTANTE: as linhas passadas a detectSchema() ficam SEM trim/colapso
+      // de espaço — a ordem real das colunas de dado é lida pela POSIÇÃO DE
+      // CARACTERE de cada palavra-chave, não pela ordem de leitura do texto
+      // concatenado (ver comentário em detectSchema). Usar `line` bruta aqui,
+      // não `key`.
+      let prevIdx = i - 1
+      while (prevIdx >= 0 && body[prevIdx].trim() === '') prevIdx--
+      const prevLineTrimmed = prevIdx >= 0 ? body[prevIdx].trim() : ''
+      const headerLines = [line]
+      if (isHeaderFragment(prevLineTrimmed) && !unknownHeaders.some((h) => h.linha === chapterStart + prevIdx + 1)) {
+        headerLines.push(body[prevIdx])
+      }
+      const nextLineTrimmed = (body[i + 1] || '').trim()
+      if (isHeaderFragment(nextLineTrimmed)) {
+        headerLines.push(body[i + 1])
         i++
       }
       if (key) {
-        activeSchema = detectSchema(key)
+        activeSchema = detectSchema(headerLines)
         unknownHeaders.push({ key, schemaDetectado: activeSchema, linha: chapterStart + i + 1 })
       }
       inObservacoes = false
