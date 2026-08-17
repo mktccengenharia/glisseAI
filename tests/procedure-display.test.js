@@ -121,10 +121,9 @@ describe('AC2 — campos do Capítulo 4', () => {
     unidade_radiofarmaco: '*',
   }
 
-  it('exibe os quatro campos quando a fonte os traz', () => {
+  it('exibe os três campos quando a fonte os traz (custo_operacional fica de fora: mesmo valor do UCO já mostrado acima, gate UX-001)', () => {
     const campos = camposCapitulo4Presentes(itemRadiologia)
     expect(campos.map((c) => c.key)).toEqual([
-      'custo_operacional',
       'custo_filme_doc',
       'numero_incidencias',
       'unidade_radiofarmaco',
@@ -164,7 +163,7 @@ describe('AC2 — campos do Capítulo 4', () => {
     expect(ur.legenda).toContain('Colégio Brasileiro de Radiologia')
   })
 
-  it('não formata custo_filme_doc nem custo_operacional como moeda', () => {
+  it('não formata custo_filme_doc como moeda', () => {
     const campos = camposCapitulo4Presentes(itemRadiologia)
     for (const campo of campos) {
       expect(campo.value).not.toContain('R$')

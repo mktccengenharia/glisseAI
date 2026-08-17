@@ -60,8 +60,15 @@ export const LEGENDA_UNIDADE_RADIOFARMACO =
 // Esses campos só se aplicam a Radiologia/Medicina Nuclear — exibir "não
 // consta" em todo procedimento fora desses grupos viraria ruído em ~80% da
 // base. Ver Story 1.6, notas de validação do @po.
+//
+// `custo_operacional` NÃO está aqui de propósito (removido por decisão do
+// usuário em 2026-08-17, gate UX-001): os scripts de import gravam
+// `uco: r.custo_operacional` — é sempre o mesmo número que o card já mostra
+// no bloco "UCO" acima. Listar os dois como campos separados fazia o mesmo
+// valor parecer dois itens cobráveis distintos, risco real num app de
+// faturamento. O campo continua no banco e no cálculo de valor_uco, só não é
+// exibido em duplicidade.
 export const CAMPOS_CAPITULO_4 = [
-  { key: 'custo_operacional', label: 'Custo Operacional', format: formatNumero },
   { key: 'custo_filme_doc', label: 'Custo Filme/Documentação', format: formatNumero },
   { key: 'numero_incidencias', label: 'Nº de Incidências', format: formatNumero },
   {

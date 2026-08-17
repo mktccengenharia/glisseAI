@@ -73,9 +73,12 @@ export async function POST(request) {
     // repetir na resposta.
     function capitulo4Lines(p) {
       const linhas = []
-      // custo_operacional e custo_filme_doc são multiplicadores da fonte, não
-      // valores em reais — nunca formatar como R$ (Article IV).
-      if (!ausente(p.custo_operacional)) linhas.push(`  Custo Operacional: ${p.custo_operacional}`)
+      // custo_filme_doc é multiplicador da fonte, não valor em reais — nunca
+      // formatar como R$ (Article IV). custo_operacional NÃO entra aqui de
+      // propósito (decisão do usuário em 2026-08-17, gate UX-001): os scripts
+      // de import gravam uco = custo_operacional, é o mesmo número que já
+      // aparece na linha "UCO" abaixo — listar os dois lia como dois dados
+      // diferentes para a LLM.
       if (!ausente(p.custo_filme_doc)) linhas.push(`  Custo de Filme/Documentação: ${p.custo_filme_doc}`)
       if (!ausente(p.numero_incidencias)) linhas.push(`  Nº de Incidências: ${p.numero_incidencias}`)
       if (!ausenteTexto(p.unidade_radiofarmaco)) {
