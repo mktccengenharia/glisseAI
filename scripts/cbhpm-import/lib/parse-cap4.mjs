@@ -53,12 +53,20 @@ function findChapterContentStart(lines, headerPattern, codePattern, afterIndex, 
 // (ex: "UR ou DOC. Porte Oper." na 2014 vs "Porte Oper. ou Doc. UR" na
 // 2018) e as abreviações também variam ("Inc." vs "Incid."). Testar
 // presença de palavra-chave, não posição, é robusto a ambos.
+// "M2" só aparece nos cabeçalhos da 3ª edição (confirmado: as outras 6
+// edições não têm essa palavra em nenhum cabeçalho de Capítulo 4) e marca um
+// defeito de extração exclusivo dela — ver schema *_m2 e o comentário em
+// parseTail. Não generalizar essa detecção para outras edições sem
+// confirmar a mesma inversão de coluna nelas.
 function detectSchema(headerText) {
+  const hasM2 = /\bM2\b/.test(headerText)
   const hasUR = /\bUR\b/.test(headerText)
   const hasIncid = /\bInc(id)?\.?\b/i.test(headerText)
   const hasAux = /\bAux\.?\b/i.test(headerText)
   const hasAnest = /\bAnest\.?\b/i.test(headerText)
 
+  if (hasM2 && hasUR) return 'porte_oper_doc_ur_m2'
+  if (hasM2 && hasIncid) return 'porte_oper_doc_incid_m2'
   if (hasUR) return 'porte_oper_doc_ur'
   if (hasIncid) return 'porte_oper_doc_incid'
   if (hasAux && hasAnest) return 'porte_oper_aux_anest'
@@ -76,7 +84,15 @@ const SCHEMA_FIELDS = {
   porte_oper_aux_anest: ['numero_auxiliares', 'porte_anestesico'],
   porte_oper_doc_incid: ['custo_filme_doc', 'numero_incidencias'],
   porte_oper_doc_ur: ['custo_filme_doc', 'unidade_radiofarmaco'],
+  // Variantes "_m2": mesmas 4 colunas de valor de porte_oper_doc_incid/_ur,
+  // mas em ORDEM DIFERENTE — ver comentário em parseTail. Só o 1º campo é
+  // real; a 4ª coluna ("M2") é descartada de propósito (confirmado com o
+  // usuário em 2026-08-17: não é usada em nenhum cálculo do produto).
+  porte_oper_doc_incid_m2: ['numero_incidencias'],
+  porte_oper_doc_ur_m2: ['unidade_radiofarmaco'],
 }
+
+const M2_SCHEMAS = new Set(['porte_oper_doc_incid_m2', 'porte_oper_doc_ur_m2'])
 
 const HEADER_LINE_RE = /^C[óo]digo\s+Procedimento\s*(.*)$/
 const NOISE_PATTERNS = [
@@ -107,6 +123,24 @@ const DASH = /^[–\-—]$/
 // e devem ser tentados antes do inteiro solto (usado por Aux./Anest./Incid.)
 const FIELD = '(?:[\\d.]+,\\d+|\\d{1,2}[A-D]|\\d{1,2}|\\*|[–\\-—])'
 
+const SINGLE_FIELD_RE = new RegExp(`^${FIELD}$`)
+
+// Conta quantos tokens no FINAL da linha (da direita pra esquerda) são,
+// individualmente, um valor reconhecível (número, decimal, porte-com-letra,
+// "*" ou traço). Usado só pelos schemas "_m2" para distinguir a forma de
+// linha validada (exatamente 4 valores) de outras formas (ex: 6 valores em
+// "RADIOLOGIA INTERVENCIONISTA") que têm colunas extras não confirmadas —
+// ver parseTail.
+function countTrailingFields(trimmed) {
+  const tokens = trimmed.split(/\s+/)
+  let count = 0
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    if (SINGLE_FIELD_RE.test(tokens[i])) count++
+    else break
+  }
+  return count
+}
+
 const TAIL_REGEX_CACHE = new Map()
 function tailRegexFor(fieldCount) {
   if (!TAIL_REGEX_CACHE.has(fieldCount)) {
@@ -133,7 +167,9 @@ const FIELD_PARSERS = {
 function parseTail(text, schema) {
   const trimmed = text.trim()
   const extraFields = SCHEMA_FIELDS[schema]
-  const fieldCount = 2 + extraFields.length // porte + custo_operacional + extras
+  // Schemas "_m2" sempre têm 4 colunas de valor: 1 campo real (extraFields[0])
+  // + custo_operacional + porte + 1 coluna descartada — nunca 2+extraFields.length.
+  const fieldCount = M2_SCHEMAS.has(schema) ? 4 : 2 + extraFields.length
   const m = tailRegexFor(fieldCount).exec(trimmed)
   if (!m) return null
 
@@ -141,14 +177,38 @@ function parseTail(text, schema) {
   const descricaoLimpa = descricao.replace(/[.\s]{4,}$/, '').replace(/\s+/g, ' ').trim()
   const values = Object.keys(tailGroups).sort().map((k) => tailGroups[k])
 
-  const result = {
-    descricao: descricaoLimpa,
-    porte: parsePorte(values[0]),
-    custo_operacional: parseDecimal(values[1]),
+  const result = { descricao: descricaoLimpa }
+
+  if (M2_SCHEMAS.has(schema)) {
+    // DEFEITO DE EXTRAÇÃO EXCLUSIVO DA 3ª EDIÇÃO (cabeçalho traz "M2" — não
+    // ocorre nas outras 6 edições, confirmado por grep em todas as fontes).
+    // Ordem real das 4 colunas nessa seção, confirmada com o usuário em
+    // 2026-08-17 comparando com o nome do procedimento (ex: "Crânio - 2
+    // incidências" tem 1º valor = 2) e com o valor de porte no banco (4A =
+    // R$ 120 bate com a tabela de valores; a ordem padrão do resto do
+    // capítulo colocava esse mesmo "4A" na 3ª posição, nunca lido):
+    //   [0] Inc./UR (campo real, extraFields[0])
+    //   [1] Custo Operacional
+    //   [2] Porte (sempre com letra 1A-14C)
+    //   [3] coluna "M2" — descartada de propósito, sem uso conhecido no cálculo
+    //
+    // Só validado para linhas com EXATAMENTE 4 valores. Uma minoria (seção
+    // "RADIOLOGIA INTERVENCIONISTA") tem 6 valores na linha — forma NÃO
+    // confirmada com o usuário; nunca adivinhar aqui (Artigo IV), então essas
+    // linhas retornam null e caem no fallback padrão de "fonte incompleta"
+    // de parseEdition, igual a qualquer outro caso não reconhecido.
+    if (countTrailingFields(trimmed) !== 4) return null
+    const [fieldName] = extraFields
+    result.porte = parsePorte(values[2])
+    result.custo_operacional = parseDecimal(values[1])
+    result[fieldName] = FIELD_PARSERS[fieldName](values[0])
+  } else {
+    result.porte = parsePorte(values[0])
+    result.custo_operacional = parseDecimal(values[1])
+    extraFields.forEach((fieldName, idx) => {
+      result[fieldName] = FIELD_PARSERS[fieldName](values[2 + idx])
+    })
   }
-  extraFields.forEach((fieldName, idx) => {
-    result[fieldName] = FIELD_PARSERS[fieldName](values[2 + idx])
-  })
 
   const camposNaoAplicaveis = ['numero_auxiliares', 'porte_anestesico', 'custo_filme_doc', 'numero_incidencias', 'unidade_radiofarmaco']
     .filter((f) => !extraFields.includes(f))
