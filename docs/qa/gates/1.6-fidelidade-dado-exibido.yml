@@ -1,0 +1,184 @@
+schema: 1
+story: '1.6'
+story_title: 'Fidelidade do Dado Exibido'
+gate: CONCERNS
+status_reason: >-
+  Os 7 ACs foram verificados independentemente no código e passam; o bug de produção
+  ("Intra-operatório" com valor_uco nulo exibindo 0) está de fato corrigido e a distinção
+  null vs. 0 genuíno está travada em teste. Ressalvas não bloqueantes: npm run build só é
+  verde a partir de um .next limpo, e o card passou a exibir o mesmo número sob dois rótulos.
+reviewer: 'Quinn (Test Architect)'
+reviewed_revision: 'commit:9698e66'
+updated: '2026-08-14T12:40:00Z'
+
+quality_checks:
+  code_review: PASS
+  unit_tests: PASS
+  acceptance_criteria: PASS
+  no_regressions: PASS
+  performance: PASS
+  security: PASS
+  documentation: CONCERNS
+
+evidence:
+  lint: 'npm run lint — No ESLint warnings or errors (executado pelo QA)'
+  tests: 'npm test — 7 arquivos, 78/78 passando (executado pelo QA, confirma o relato do @dev)'
+  build: >-
+    npm run build — verde APENAS a partir de .next limpo (exit 0). Em execução incremental
+    falha de forma determinística com EINVAL readlink (reproduzido 2x pelo QA). Ver BUILD-001.
+  test_timeout_check: >-
+    testTimeout 30s NÃO mascara teste lento: a duração máxima de um teste individual é 511ms
+    e a suíte inteira roda em 2,3s com --testTimeout=5000 em cache quente. O custo é de import
+    de módulo (@huggingface/transformers), não de código sob teste. Mudança config-only.
+  broken_commit_recovery: >-
+    Estado quebrado do commit intermediário 97839ad confirmado como resolvido: nenhum resíduo de
+    logEmptySearch, nenhum SELECT_COLUMNS local sombreando o exportado, working tree limpa.
+
+ac_verification:
+  AC1:
+    status: PASS
+    note: >-
+      Verificado ponta a ponta, não só pelo teste. valor_uco/uco null -> "Não consta na fonte"
+      (page.jsx:174-175 + procedure-display.js:19-32); valor_uco/uco 0 -> "0 · R$ 0,00"
+      (isAusente(0) === false). A distinção, que é o objetivo central da story, está preservada
+      no card E no texto do chat (chat/route.js:99-100). Sem regressão no chat: o texto anterior
+      dizia "não informado" e agora usa a convenção explícita + regra no system prompt.
+  AC2:
+    status: PASS
+    note: >-
+      pickResultFields é aplicado ao array final (route.js:253), portanto cobre os 4 ramos,
+      inclusive as duas RPCs `returns setof`. embedding fica de fora em todos os ramos — ganho
+      real de banda (384 floats/linha deixam de trafegar). RISCO ALTO VERIFICADO À PARTE: os 3
+      novos nomes de coluna do select real não são cobertos pelos testes (mockados); confirmado
+      que existem em produção porque 14-import-cap4.mjs:117-119 grava exatamente esses nomes e
+      a Story 1.4 está Done com os relatórios de importação presentes.
+  AC3:
+    status: PASS
+    note: 'slice(0, 5) eliminado; MAX_CARDS_EXIBIDOS=10 (page.jsx:557). Mensagem de teto não afirma exaustividade, travado em teste.'
+  AC4:
+    status: PASS
+    note: >-
+      Nenhum limiar numérico de similaridade em lugar algum — MATCH_TYPES carrega apenas
+      identidade de ramo. A proibição explícita da story foi respeitada.
+  AC5:
+    status: PASS
+    note: >-
+      logSearchEvent sem await (route.js:258). O teste de insert que nunca resolve
+      (insertBehavior 'hang', search-route.test.js:287) é prova genuína de não bloqueio, não
+      teatro. A coluna `tipo` de search_events não tem CHECK constraint, então os valores novos
+      ('semantico', 'texto-sem-acento') vão inserir sem erro quando a migration for aplicada.
+  AC6:
+    status: PASS
+    note: >-
+      Mapeamento estático, sem dependência de cbhpm_versoes.vigencia_inicio. As 7 chaves foram
+      conferidas caractere a caractere contra versaoLabel em editions.mjs (6) e
+      14-import-cap4.mjs:29 (CBHPM 2018) — nenhuma edição cai no fallback de "desconhecida".
+      Desempate 2015/2016 por ano de edição é correto: ambas compartilham vigencia '2015-2016',
+      que é a vigência dos VALORES de porte, não o ano da edição.
+  AC7:
+    status: CONCERNS
+    note: 'lint e test verdes. build verde só com .next limpo — ver BUILD-001.'
+
+top_issues:
+  - id: 'BUILD-001'
+    severity: medium
+    category: build
+    finding: >-
+      npm run build falha de forma determinística em execução incremental com
+      "EINVAL: invalid argument, readlink '.next/...'". Reproduzido 2x pelo QA (.next/package.json
+      e .next/react-loadable-manifest.json). Só passa após rm -rf .next.
+    analysis: >-
+      NÃO é causado por esta story: a falha ocorre em recursiveDelete do .next, antes de qualquer
+      compilação de código-fonte. Causa provável: repositório dentro de pasta sincronizada pelo
+      OneDrive, cujos placeholders são lidos como reparse points pelo readlink do Next.
+    suggested_action: >-
+      Adicionar script "prebuild": "rimraf .next" no package.json, ou mover o repositório para
+      fora do OneDrive. Encaminhar a @devops antes de qualquer pipeline de CI.
+  - id: 'UX-001'
+    severity: medium
+    category: requirements
+    finding: >-
+      O card passou a exibir o mesmo número sob dois rótulos: "UCO" e "Custo Operacional".
+      Confirmado que são o mesmo dado — os 3 scripts de import fazem `uco: r.custo_operacional`
+      (14-import-cap4.mjs:108, 05-import-to-supabase.mjs:94, 08-import-multi.mjs:77).
+    analysis: >-
+      O @dev agiu corretamente: o AC2 pede custo_operacional explicitamente, e omitir seria
+      reinterpretar escopo (Article IV). A decisão foi escalada, não escondida. O risco é de
+      leitura: num sistema de faturamento, dois rótulos com o mesmo número podem ser lidos como
+      dois itens cobráveis distintos.
+    suggested_action: 'Decisão de produto do @po: fundir os rótulos ou manter. Story de acabamento.'
+  - id: 'TEST-001'
+    severity: medium
+    category: tests
+    finding: >-
+      O teste de regressão do bug de produção (procedure-display.test.js:69-80) usa um helper
+      local `derivarCard` que REPLICA a lógica do ProcedureCard em vez de exercitar o componente.
+    analysis: >-
+      Conferido manualmente que o helper hoje espelha page.jsx:133-135 e 162-182 exatamente, então
+      o teste é fiel no estado atual e a regressão está de fato coberta. Mas ele não pega uma
+      divergência futura em page.jsx — o teste continuaria verde com o componente quebrado.
+      Causa raiz: a suíte roda em environment 'node', sem jsdom.
+    suggested_action: >-
+      Adicionar jsdom + @testing-library/react e converter esse bloco em teste de render do
+      ProcedureCard. Débito técnico, não bloqueante.
+  - id: 'TEST-002'
+    severity: low
+    category: tests
+    finding: >-
+      A correção do rateio de auxiliares com valor_porte nulo (page.jsx:205, decisão 4 do @dev)
+      é um acerto real e da mesma classe do AC1, mas não tem teste.
+    suggested_action: 'Cobrir em teste junto com TEST-001.'
+  - id: 'PERF-001'
+    severity: low
+    category: performance
+    finding: >-
+      search_events passa de escrita rara (só busca vazia) para escrita em toda busca, numa tabela
+      sem política de retenção nem índice.
+    analysis: 'Desprezível na escala atual (piloto). A escrita é fire-and-forget e não afeta latência.'
+    suggested_action: 'Monitorar volume depois que a migration da seção 11 for aplicada.'
+  - id: 'DOC-001'
+    severity: low
+    category: docs
+    finding: >-
+      testTimeout foi elevado globalmente para 30s em vez de tornar preguiçoso o import de
+      @huggingface/transformers, que é a causa raiz.
+    analysis: >-
+      Validado que não mascara teste lento (máx. individual 511ms). O @dev já registrou o import
+      preguiçoso como débito técnico e deliberadamente não o implementou por estar fora dos ACs —
+      decisão correta de escopo.
+    suggested_action: 'Manter o débito registrado; o import preguiçoso também reduziria o cold start real da busca.'
+
+dev_decisions_review:
+  - decision: 'Fusão de rótulo custo_operacional/uco'
+    verdict: 'Correta como implementação, escalada corretamente. Ver UX-001.'
+  - decision: 'Não formatar custo_operacional/custo_filme_doc como R$'
+    verdict: >-
+      CORRETA e exemplar quanto ao Article IV. Confirmado que são multiplicadores:
+      05-import-to-supabase.mjs:95 calcula valor_uco = custo_operacional * valor_uco_da_vigência.
+      Formatá-los como moeda inventaria uma unidade que a CBHPM não fornece.
+  - decision: 'Frase única quando ambos os campos de UCO são nulos'
+    verdict: 'Correta. Evita "Não consta na fonte · Não consta na fonte". Coberta em teste.'
+  - decision: 'Desempate 2015/2016 por ano de edição'
+    verdict: 'Correta e verificada contra editions.mjs. Era o único critério inequívoco disponível.'
+  - decision: 'testTimeout 5s -> 30s'
+    verdict: 'Aceitável, validada independentemente pelo QA. Ver DOC-001.'
+  - decision: 'Contorno do EINVAL com rm -rf .next'
+    verdict: 'Contorno legítimo de problema de ambiente, mas precisa virar solução. Ver BUILD-001.'
+
+no_invention_check:
+  article_iv: PASS
+  note: >-
+    Nenhuma das 6 decisões inventa dado. unidade_radiofarmaco chega literal ("*") ao card e ao
+    contexto da LLM, com legenda que explica a referência externa sem simular preço, e regra
+    dedicada no system prompt proibindo conversão em reais. Nenhum limiar de similaridade foi
+    introduzido. Nenhuma migration nova foi criada, como a story exigia.
+
+blocked_by_external:
+  - 'Migration da seção 11 de supabase/schema.sql (search_events) segue pendente de aplicação manual pelo usuário. AC4/AC5 funcionam na UI, mas o dado de calibração não acumula até lá. Documentado pela story, não bloqueia o gate.'
+
+waiver: { active: false }
+
+recommendation:
+  next_agent: '@devops'
+  next_command: '*push'
+  note: 'BUILD-001 deve ser resolvido por @devops antes de configurar qualquer CI. UX-001 vai para @po.'
