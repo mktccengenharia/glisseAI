@@ -83,6 +83,9 @@ top_issues:
   - id: 'BUILD-001'
     severity: medium
     category: build
+    status: RESOLVED
+    resolved_by: '@devops (Gage)'
+    resolved_commit: 'pending'
     finding: >-
       npm run build falha de forma determinística em execução incremental com
       "EINVAL: invalid argument, readlink '.next/...'". Reproduzido 2x pelo QA (.next/package.json
@@ -91,9 +94,11 @@ top_issues:
       NÃO é causado por esta story: a falha ocorre em recursiveDelete do .next, antes de qualquer
       compilação de código-fonte. Causa provável: repositório dentro de pasta sincronizada pelo
       OneDrive, cujos placeholders são lidos como reparse points pelo readlink do Next.
-    suggested_action: >-
-      Adicionar script "prebuild": "rimraf .next" no package.json, ou mover o repositório para
-      fora do OneDrive. Encaminhar a @devops antes de qualquer pipeline de CI.
+    resolution: >-
+      Adicionado script "prebuild": "rimraf .next" no package.json (rimraf ^6.1.3 como devDependency
+      direta). npm executa prebuild automaticamente antes de build via lifecycle hooks, eliminando
+      o .next stale antes que o readlink do Next tropece nos reparse points do OneDrive. Verificado
+      com dois `npm run build` consecutivos sem rm -rf manual — ambos verdes.
   - id: 'UX-001'
     severity: medium
     category: requirements
