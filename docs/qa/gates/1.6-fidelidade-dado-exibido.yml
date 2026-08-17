@@ -85,7 +85,7 @@ top_issues:
     category: build
     status: RESOLVED
     resolved_by: '@devops (Gage)'
-    resolved_commit: 'pending'
+    resolved_commit: 'af964cd'
     finding: >-
       npm run build falha de forma determinística em execução incremental com
       "EINVAL: invalid argument, readlink '.next/...'". Reproduzido 2x pelo QA (.next/package.json
