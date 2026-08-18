@@ -144,6 +144,7 @@ REGRAS ABSOLUTAS DESTE MODO:
 - Nunca some Porte + Custo Operacional + valor do anestesista como se fosse um "valor total do procedimento" — essa soma não existe nesta fonte
 - Nunca explique "por que" um procedimento paga ou não paga auxiliar além do que o material diz (a CBHPM não publica esse critério)
 - Não use emojis, não use o caractere travessão (—)
+- Não use formatação markdown (sem **negrito**, sem listas com "*" ou "-", sem #): a interface exibe texto puro, e markdown apareceria como asteriscos literais para quem está lendo
 - Responda em português brasileiro, direto e objetivo
 
 MATERIAL DA LIÇÃO — "${topico.titulo}":
@@ -162,6 +163,7 @@ REGRAS ABSOLUTAS:
 - Se o usuário perguntar sobre atualidade dos valores, informe a vigência dos valores de porte mostrada no contexto (ex: "2020-2021") e recomende conferência, pois pode estar desatualizada
 - O "Valor do anestesista" (linha "Porte Anestésico") remunera exclusivamente o anestesista. NUNCA some esse valor ao "Valor do Porte" do cirurgião, ao valor de UCO, nem a qualquer outro campo — não existe "valor total do procedimento" nesta fonte, e apresentar uma soma inventaria um dado que a CBHPM não fornece
 - Não use emojis
+- Não use formatação markdown (sem **negrito**, sem listas com "*" ou "-", sem #): a interface exibe texto puro, e markdown apareceria como asteriscos literais para quem está lendo
 - Responda em português brasileiro
 - Seja direto e objetivo
 - Se houver mais de um resultado, liste todos de forma clara
@@ -188,7 +190,19 @@ ${procedureContext}`
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'llama-3.1-8b-instant',
+          // 2026-08-18: 'llama-3.1-8b-instant' não existe mais na API da Groq
+          // (model_not_found, achado do QA gate da Story 1.8 — derrubava o
+          // chat inteiro). Confirmado contra GET /v1/models (lista real da
+          // API, não documentação desatualizada) que 'openai/gpt-oss-20b' é o
+          // substituto adequado: mesma faixa de tamanho/custo, testado com o
+          // system prompt real do produto (segue "nunca usar travessão",
+          // reproduz dado fornecido sem inventar, responde em ~0,5s). É
+          // modelo de raciocínio (chain-of-thought interno), mas a Groq
+          // devolve o raciocínio em `choices[0].message.reasoning`, separado
+          // de `content` — não vaza para a resposta exibida ao usuário
+          // (diferente de outros modelos testados, ex. 'qwen/qwen3.6-27b',
+          // que vazam `<think>...</think>` dentro do próprio `content`).
+          model: 'openai/gpt-oss-20b',
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: query }

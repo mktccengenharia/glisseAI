@@ -50,8 +50,11 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+let ipCounter = 0
 function getPostRequest(body) {
-  return { json: async () => body, headers: { get: () => null } }
+  ipCounter += 1
+  const ip = `9.9.${Math.floor(ipCounter / 250)}.${ipCounter % 250}`
+  return { json: async () => body, headers: { get: (name) => (name.toLowerCase() === 'x-forwarded-for' ? ip : null) } }
 }
 
 describe('Story 1.7 — AC4: valor do porte anestésico no contexto do chat', () => {
@@ -173,5 +176,31 @@ describe('Story 1.8 — AC5: pergunta ancorada por tópico', () => {
       const systemMsg = capturedBody.messages.find((m) => m.role === 'system').content
       expect(systemMsg).toContain(`MATERIAL DA LIÇÃO — "${t.titulo}"`)
     }
+  })
+})
+
+// 2026-08-18 — 'llama-3.1-8b-instant' parou de existir na API da Groq
+// (model_not_found), derrubando o chat inteiro (achado do QA gate da Story
+// 1.8). Travado em teste para que uma reversão futura não reintroduza um
+// modelo morto sem ninguém notar até produção quebrar de novo.
+describe('2026-08-18 — modelo da Groq e formatação de saída', () => {
+  it('usa um modelo que existe (nunca o llama-3.1-8b-instant descontinuado)', async () => {
+    const { POST } = await loadRoute()
+    await POST(getPostRequest({ query: 'x', procedures: [procedimentoBase()] }))
+    expect(capturedBody.model).toBe('openai/gpt-oss-20b')
+    expect(capturedBody.model).not.toBe('llama-3.1-8b-instant')
+  })
+
+  it('instrui a não usar markdown, nos dois modos (a interface exibe texto puro)', async () => {
+    const { POST } = await loadRoute()
+
+    await POST(getPostRequest({ query: 'x', procedures: [procedimentoBase()] }))
+    const systemMsgNormal = capturedBody.messages.find((m) => m.role === 'system').content
+    expect(systemMsgNormal.toLowerCase()).toContain('não use formatação markdown')
+
+    capturedBody = null
+    await POST(getPostRequest({ query: 'x', topicoId: 'porte', procedures: [procedimentoBase()] }))
+    const systemMsgLicao = capturedBody.messages.find((m) => m.role === 'system').content
+    expect(systemMsgLicao.toLowerCase()).toContain('não use formatação markdown')
   })
 })
