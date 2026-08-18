@@ -139,6 +139,12 @@ function ProcedureCard({ item, aproximado = false }) {
   // null = não consta na fonte (não é o mesmo que 0) — nunca usar `|| 0` aqui
   const numeroAuxiliares = item.numero_auxiliares ?? null
   const porteAnestesico = item.porte_anestesico ?? null
+  // Story 1.7: valor em R$ já calculado por /api/search (mapeamento porte
+  // anestésico -> porte CBHPM). null quando não se aplica (porte 0/ausente)
+  // OU quando a edição não tem valor cadastrado para o porte equivalente —
+  // as duas situações são visualmente idênticas de propósito ("Não consta na
+  // fonte"), a distinção de qual é qual não muda a ação do faturista.
+  const valorPorteAnestesico = item.valor_porte_anestesico ?? null
   // Percentual de rateio muda por edição (60/40/30/30 na 2018, 30/20/20/20 nas
   // demais) — vem do próprio registro, com fallback só para dado antigo.
   const AUX_PCT = Array.isArray(item.aux_pct) && item.aux_pct.length ? item.aux_pct : [0.3, 0.2, 0.2, 0.2]
@@ -183,9 +189,23 @@ function ProcedureCard({ item, aproximado = false }) {
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-0.5">Porte Anestésico</p>
-            <p className="text-sm font-medium text-black">
-              {porteAnestesico !== null ? porteAnestesico : (anestesia !== '0' ? anestesia : 'Sem anestesia')}
-            </p>
+            {porteAnestesico !== null && porteAnestesico !== 0 ? (
+              <>
+                <p className="text-sm font-medium text-black">
+                  {porteAnestesico}{' · '}
+                  <span className={isAusente(valorPorteAnestesico) ? 'text-gray-400' : undefined}>
+                    {isAusente(valorPorteAnestesico) ? NAO_CONSTA : formatValorBRL(valorPorteAnestesico)}
+                  </span>
+                </p>
+                {/* Rotulagem obrigatória (Story 1.7, Article IV): valor do
+                    anestesista, nunca parte de um total do procedimento. */}
+                <p className="text-[10px] text-gray-400 mt-0.5">Valor do anestesista</p>
+              </>
+            ) : (
+              <p className="text-sm font-medium text-black">
+                {porteAnestesico !== null ? porteAnestesico : (anestesia !== '0' ? anestesia : 'Sem anestesia')}
+              </p>
+            )}
           </div>
           <div className="col-span-2">
             <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-0.5">Auxiliares de Cirurgia</p>

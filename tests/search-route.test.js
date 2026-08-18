@@ -10,6 +10,9 @@ const state = {
   rpcErrors: {},
   inserts: [],
   insertBehavior: 'ok',
+  // Story 1.7: linhas de cbhpm_porte_valores para o lookup de porte anestésico.
+  porteValores: [],
+  porteValoresError: null,
 }
 
 function makeQueryBuilder() {
@@ -47,6 +50,18 @@ vi.mock('@supabase/supabase-js', () => ({
             return Promise.resolve({ error: null })
           },
         }
+      }
+      if (table === 'cbhpm_porte_valores') {
+        const builder = {
+          select: () => builder,
+          in: () => builder,
+          then: (resolve) =>
+            resolve({
+              data: state.porteValoresError ? null : state.porteValores,
+              error: state.porteValoresError,
+            }),
+        }
+        return builder
       }
       return makeQueryBuilder()
     },
@@ -114,6 +129,8 @@ beforeEach(() => {
   state.rpcErrors = {}
   state.inserts = []
   state.insertBehavior = 'ok'
+  state.porteValores = []
+  state.porteValoresError = null
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.supabase.co')
   vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'test-service-key')
 })
@@ -187,7 +204,11 @@ describe('AC2 — paridade de campos entre os quatro caminhos de busca', () => {
       const data = await res.json()
 
       expect(data.results).toHaveLength(1)
-      expect(Object.keys(data.results[0]).sort()).toEqual([...RESULT_FIELDS].sort())
+      // RESPONSE_FIELDS, não RESULT_FIELDS: inclui valor_porte_anestesico
+      // (Story 1.7), que é calculado, não uma coluna de cbhpm_procedures —
+      // ver comentário em RESPONSE_FIELDS no route.js.
+      const { RESPONSE_FIELDS } = await loadRoute()
+      expect(Object.keys(data.results[0]).sort()).toEqual([...RESPONSE_FIELDS].sort())
       expect(data.results[0].custo_filme_doc).toBe(0.5)
       expect(data.results[0].numero_incidencias).toBe(3)
       // Article IV: chega ao frontend sem transformação.
@@ -299,5 +320,76 @@ describe('AC5 — log de toda busca em search_events', () => {
     expect(data.results).toEqual([])
     expect(data.matchType).toBeNull()
     expect(state.inserts).toHaveLength(0)
+  })
+})
+
+describe('Story 1.7 — valor em R$ do porte anestésico', () => {
+  it('AC1: mapeia os 9 valores (0 a 8) para o porte CBHPM correto', async () => {
+    const { PORTE_ANESTESICO_PARA_CBHPM } = await loadRoute()
+    expect(PORTE_ANESTESICO_PARA_CBHPM).toEqual({
+      1: '3A',
+      2: '3C',
+      3: '4C',
+      4: '6B',
+      5: '7C',
+      6: '9B',
+      7: '10C',
+      8: '12A',
+    })
+    // 0 é caso especial ("não participação do anestesiologista") — não mapeia
+    // para nenhum porte CBHPM.
+    expect(PORTE_ANESTESICO_PARA_CBHPM[0]).toBeUndefined()
+  })
+
+  it('AC2: porte_anestesico 4 busca o valor de "6B" na edição do procedimento', async () => {
+    state.rows.codigo = [linhaSelect({ porte_anestesico: 4, versao: 'CBHPM 2018' })]
+    state.porteValores = [{ versao: 'CBHPM 2018', codigo_porte: '6B', valor: 608 }]
+    const { GET } = await loadRoute()
+    const data = await (await GET(getRequest('http://localhost/api/search?q=4.08.01.03-8'))).json()
+    expect(data.results[0].valor_porte_anestesico).toBe(608)
+  })
+
+  it('AC2: porte_anestesico null não dispara busca em cbhpm_porte_valores', async () => {
+    state.rows.codigo = [linhaSelect({ porte_anestesico: null })]
+    const { GET } = await loadRoute()
+    const data = await (await GET(getRequest('http://localhost/api/search?q=4.08.01.03-8'))).json()
+    expect(data.results[0].valor_porte_anestesico).toBeNull()
+  })
+
+  it('AC2: porte_anestesico 0 não dispara busca em cbhpm_porte_valores', async () => {
+    state.rows.codigo = [linhaSelect({ porte_anestesico: 0 })]
+    const { GET } = await loadRoute()
+    const data = await (await GET(getRequest('http://localhost/api/search?q=4.08.01.03-8'))).json()
+    expect(data.results[0].valor_porte_anestesico).toBeNull()
+  })
+
+  it('AC2: edição sem valor cadastrado para o porte equivalente resulta em null, não erro', async () => {
+    state.rows.codigo = [linhaSelect({ porte_anestesico: 4, versao: 'CBHPM 2018' })]
+    state.porteValores = [] // nenhuma linha para "6B" nessa edição
+    const { GET } = await loadRoute()
+    const res = await GET(getRequest('http://localhost/api/search?q=4.08.01.03-8'))
+    const data = await res.json()
+    expect(res.status ?? 200).toBe(200)
+    expect(data.results[0].valor_porte_anestesico).toBeNull()
+  })
+
+  it('AC2: falha no lookup de porte anestésico não derruba a busca', async () => {
+    state.rows.codigo = [linhaSelect({ porte_anestesico: 4, versao: 'CBHPM 2018' })]
+    state.porteValoresError = new Error('conexão indisponível')
+    const { GET } = await loadRoute()
+    const res = await GET(getRequest('http://localhost/api/search?q=4.08.01.03-8'))
+    const data = await res.json()
+    expect(res.status ?? 200).toBe(200)
+    expect(data.results).toHaveLength(1)
+    expect(data.results[0].valor_porte_anestesico).toBeNull()
+  })
+
+  it('AC2: busca por edição — não usa valor de outra edição para o mesmo código de porte', async () => {
+    state.rows.codigo = [linhaSelect({ porte_anestesico: 4, versao: 'CBHPM 2018' })]
+    // "6B" só tem valor cadastrado numa edição DIFERENTE da do procedimento.
+    state.porteValores = [{ versao: 'CBHPM 2016', codigo_porte: '6B', valor: 400 }]
+    const { GET } = await loadRoute()
+    const data = await (await GET(getRequest('http://localhost/api/search?q=4.08.01.03-8'))).json()
+    expect(data.results[0].valor_porte_anestesico).toBeNull()
   })
 })

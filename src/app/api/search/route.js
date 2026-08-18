@@ -85,6 +85,16 @@ export const RESULT_FIELDS = [
   'aux_pct',
 ]
 
+// Story 1.7: `valor_porte_anestesico` NÃO é uma coluna de `cbhpm_procedures` —
+// é calculado por `attachValorPorteAnestesico` a partir de `porte_anestesico`
+// (que É uma coluna real, já em RESULT_FIELDS) via lookup em
+// `cbhpm_porte_valores`. Por isso vive FORA de RESULT_FIELDS: RESULT_FIELDS
+// vira `SELECT_COLUMNS`, a lista de colunas da query real no Supabase —
+// incluí-lo lá quebraria a busca (coluna inexistente). RESPONSE_FIELDS é o
+// conjunto final devolvido ao client, usado só para validar paridade em
+// teste, nunca para montar uma query.
+export const RESPONSE_FIELDS = [...RESULT_FIELDS, 'valor_porte_anestesico']
+
 const SELECT_COLUMNS = RESULT_FIELDS.join(', ')
 
 // Normaliza uma linha para exatamente RESULT_FIELDS. Campo ausente vira null
@@ -96,6 +106,72 @@ export function pickResultFields(row) {
     out[field] = row?.[field] ?? null
   }
   return out
+}
+
+// Correspondência oficial porte_anestesico -> porte CBHPM ("Instruções Gerais
+// Específicas para a Anestesiologia", item 2, bloco de observações do código
+// 3.16.02.99-1), verificada idêntica em 8 edições (3ª, 2008, 2010, 2014,
+// 2015, 2016, 2018, 2022) — ver docs/research/2026-08-17-fundamentos-
+// -faturamento-cbhpm/02-research-report.md#3.5. NUNCA usar a correspondência
+// publicada pelo blog da Rivio (1=3A, 2=3C, 3=5B, 4=7B, 5=9A, 6=9B, 7=11C,
+// 8=13C) — não confere com nenhuma das 8 edições oficiais verificadas.
+//
+// porte_anestesico 0 não entra aqui de propósito: "0 = NÃO PARTICIPAÇÃO DO
+// ANESTESIOLOGISTA" (item 3 da mesma fonte), não tem porte CBHPM associado.
+export const PORTE_ANESTESICO_PARA_CBHPM = {
+  1: '3A',
+  2: '3C',
+  3: '4C',
+  4: '6B',
+  5: '7C',
+  6: '9B',
+  7: '10C',
+  8: '12A',
+}
+
+// Busca em cbhpm_porte_valores o valor em R$ do porte anestésico de cada
+// resultado, pela mesma edição do procedimento (nunca uma edição fixa —
+// cbhpm_porte_valores tem unique(versao, codigo_porte), o mesmo código de
+// porte vale valores diferentes por edição). Anexa `valor_porte_anestesico`
+// a cada resultado; fica `null` quando porte_anestesico for 0/null/undefined
+// (não se aplica) ou quando a edição não tiver valor cadastrado para o porte
+// equivalente (dado ausente na fonte para aquela edição — Article IV, nunca
+// vira 0 nem é omitido em silêncio).
+//
+// Único lugar do app que faz esse lookup: /api/chat recebe os resultados já
+// prontos de /api/search (ver page.jsx, client passa searchData.results
+// direto como `procedures` no corpo de POST /api/chat), então não duplica a
+// busca nem o mapeamento.
+async function attachValorPorteAnestesico(supabase, results) {
+  const pares = new Set()
+  for (const r of results) {
+    const codigoCbhpm = PORTE_ANESTESICO_PARA_CBHPM[r.porte_anestesico]
+    if (codigoCbhpm && r.versao) pares.add(`${r.versao}|${codigoCbhpm}`)
+  }
+
+  const valoresPorPar = new Map()
+  if (pares.size > 0) {
+    const versoes = [...new Set([...pares].map((p) => p.split('|')[0]))]
+    const codigos = [...new Set([...pares].map((p) => p.split('|')[1]))]
+    const { data: portesData, error: portesError } = await supabase
+      .from('cbhpm_porte_valores')
+      .select('versao, codigo_porte, valor')
+      .in('versao', versoes)
+      .in('codigo_porte', codigos)
+    if (portesError) {
+      console.error('Falha ao buscar valor de porte anestésico:', portesError.message)
+    } else {
+      for (const row of portesData || []) {
+        valoresPorPar.set(`${row.versao}|${row.codigo_porte}`, row.valor)
+      }
+    }
+  }
+
+  return results.map((r) => {
+    const codigoCbhpm = PORTE_ANESTESICO_PARA_CBHPM[r.porte_anestesico]
+    const valor = codigoCbhpm ? valoresPorPar.get(`${r.versao}|${codigoCbhpm}`) ?? null : null
+    return { ...r, valor_porte_anestesico: valor }
+  })
 }
 
 // Best-effort: loga TODA busca (com e sem resultado) para medir a taxa real de
@@ -250,7 +326,10 @@ export async function GET(request) {
 
   // Normaliza os quatro caminhos para o mesmo conjunto de campos. É também o
   // que garante que "embedding" nunca chegue ao client pelas RPCs.
-  const results = (data || []).map(pickResultFields)
+  const resultsBase = (data || []).map(pickResultFields)
+  // Story 1.7: anexa o valor em R$ do porte anestésico (lookup best-effort —
+  // falha aqui não derruba a busca, só deixa valor_porte_anestesico null).
+  const results = await attachValorPorteAnestesico(supabase, resultsBase)
   const teveResultado = results.length > 0
 
   // Toda busca é registrada, não só a que voltou vazia. Sem `await`: a
