@@ -31,21 +31,11 @@ describe('AC2 — estrutura dos 4 blocos', () => {
 describe('AC3 — restrições de conteúdo (Artigo IV)', () => {
   const textoCompleto = TOPICOS.flatMap((t) => t.paragrafos.map((p) => p.texto)).join('\n')
 
-  it('nunca usa "horário especial" como se fosse termo da CBHPM (só para dizer que NÃO é)', () => {
-    const ocorrencias = textoCompleto.match(/horário especial/gi) || []
-    // Pode mencionar o termo (para explicar que não é da CBHPM), mas cada
-    // menção tem que vir acompanhada da negação/explicação, nunca sozinha.
-    for (const trecho of TOPICOS.flatMap((t) => t.paragrafos)) {
-      if (/horário especial/i.test(trecho.texto)) {
-        expect(trecho.texto).toMatch(/não é|NÃO existe|não aparece/i)
-      }
-    }
-    expect(ocorrencias.length).toBeGreaterThan(0) // o tópico precisa mencionar o termo popular
-  })
-
-  it('nome oficial "Atendimento de Urgência e Emergência" está presente', () => {
-    expect(textoCompleto).toContain('Atendimento de Urgência e Emergência')
-  })
+  // 2026-08-18: o parágrafo de esclarecimento terminológico sobre "horário
+  // especial" foi removido do conteúdo a pedido do usuário (deixar a lição
+  // mais direta) — a regra em si (acréscimo de 30% em plantão/urgência)
+  // continua no primeiro parágrafo de "Modificadores", só sem a introdução
+  // sobre o nome popular vs. o nome oficial da CBHPM.
 
   it('nunca afirma "por que" um procedimento paga auxiliar além do que a fonte diz', () => {
     // A única resposta permitida é a atribuição normativa — não pode haver
@@ -66,10 +56,15 @@ describe('AC3 — restrições de conteúdo (Artigo IV)', () => {
     }
   })
 
-  it('percentuais de auxiliar citam a edição a que se aplicam, nunca genérico', () => {
+  // 2026-08-18: o parágrafo com os percentuais das edições 2018/2022 (60/40/
+  // 30/30) foi removido do texto a pedido do usuário — esse dado continua
+  // visível para quem estuda, só que via "Exemplo ao vivo" (o exemplo padrão
+  // é CBHPM 2018, que usa exatamente esses percentuais), não como prosa
+  // duplicada. Fica só a citação textual da faixa mais antiga (3ª a 2016).
+  it('percentual de auxiliar citado no texto está associado à edição correspondente', () => {
     const blocoAuxiliares = TOPICOS.find((t) => t.id === 'quem-recebe').paragrafos
     const percentuais = blocoAuxiliares.filter((p) => /30%|60%/.test(p.texto))
-    expect(percentuais.length).toBeGreaterThanOrEqual(2) // pelo menos um por faixa de edição
+    expect(percentuais.length).toBeGreaterThanOrEqual(1)
     for (const p of percentuais) {
       expect(p.texto + p.fonte).toMatch(/edições?|edição/i)
     }

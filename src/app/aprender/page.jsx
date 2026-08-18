@@ -191,7 +191,7 @@ export default function ModoAprendizado() {
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-6">
           <p className="text-xs text-amber-800">
             <strong>Material de estudo.</strong> Toda regra aqui é citada por item e edição da CBHPM.
-            O contrato do seu convênio pode divergir da tabela — confirme antes de faturar.
+            O contrato do seu convênio pode divergir da tabela. Confirme antes de faturar.
           </p>
         </div>
 

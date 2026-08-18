@@ -8,6 +8,11 @@
 // que o relatório cobre com confiança ALTA. Nunca citar número de item sem
 // citar também a edição — a numeração interna das Instruções Gerais está
 // defasada entre edições (ver seção 3.6 do relatório, nota de rastreabilidade).
+//
+// 2026-08-18: texto revisado a pedido do usuário para tirar travessão longo
+// (mesma regra já usada no chat, ver src/app/api/chat/route.js) e deixar a
+// explicação mais didática. Nas fontes, o separador virou "·", mesma
+// convenção já usada no "Exemplo ao vivo" (src/app/aprender/page.jsx).
 
 export const RELATORIO_PESQUISA = 'docs/research/2026-08-17-fundamentos-faturamento-cbhpm/02-research-report.md'
 
@@ -26,19 +31,19 @@ export const TOPICOS = [
     paragrafos: [
       {
         texto: 'O porte não representa dinheiro. Ele só estabelece uma comparação entre procedimentos quanto à complexidade técnica, tempo de execução, atenção requerida e grau de treinamento do profissional.',
-        fonte: 'CBHPM, item 1.2 (texto idêntico da 3ª edição à 2022) — relatório seção 3.1',
+        fonte: 'CBHPM, item 1.2 (texto idêntico da 3ª edição à 2022) · relatório seção 3.1',
       },
       {
         texto: 'A pontuação dos procedimentos está agrupada em 14 portes e três subportes (A, B e C). Os portes anestésicos são um conjunto separado, de 0 a 8, com correspondência própria para os demais portes.',
-        fonte: 'CBHPM 2018, item 1.3 — relatório seção 3.2',
+        fonte: 'CBHPM 2018, item 1.3 · relatório seção 3.2',
       },
       {
-        texto: 'O valor em reais do porte não vem da edição da tabela — vem do Comunicado Oficial da AMB, que atualiza os valores em calendário separado. Por isso existe, por exemplo, "CBHPM 2018 com valores 2020-2021": a estrutura da tabela e o preço mudam em datas diferentes.',
-        fonte: 'Comunicado Oficial AMB (ex.: Porte CBHPM 2018.pdf) — relatório seção 3.4',
+        texto: 'O valor em reais do porte não vem da edição da tabela: vem do Comunicado Oficial da AMB, que atualiza os valores em calendário separado. Por isso existe, por exemplo, "CBHPM 2018 com valores 2020-2021": a estrutura da tabela e o preço mudam em datas diferentes.',
+        fonte: 'Comunicado Oficial AMB (ex.: Porte CBHPM 2018.pdf) · relatório seção 3.4',
       },
       {
         texto: 'Os valores publicados são referenciais MÍNIMOS, com banda de até 20% para mais ou para menos, sujeitos a negociação entre as partes. Por particular, a CBHPM é só referência; por convênio, vale o que o contrato define (normalmente "CBHPM edição X, a Y%").',
-        fonte: 'CBHPM, item 1.3 — relatório seção 3.3',
+        fonte: 'CBHPM, item 1.3 · relatório seção 3.3',
       },
     ],
   },
@@ -47,20 +52,20 @@ export const TOPICOS = [
     titulo: 'Os Quatro Números de uma Linha',
     paragrafos: [
       {
-        texto: 'Porte: remunera o cirurgião. É a base de todo o resto — auxiliares e, indiretamente, o anestesista são calculados a partir dele.',
+        texto: 'Porte: remunera o cirurgião. É a base de todo o resto, pois auxiliares e, indiretamente, o anestesista são calculados a partir dele.',
         fonte: 'ver tópico "O que é Porte"',
       },
       {
-        texto: 'Custo Operacional (UCO): cobre estrutura — depreciação de equipamento, manutenção, mobiliário, imóvel, aluguel, folha de pagamento. NÃO cobre material descartável nem acessório: esses são negociados fora da tabela, diretamente entre as partes.',
-        fonte: 'CBHPM 2018, item 1.3 — relatório seção 3.2',
+        texto: 'Custo Operacional (UCO): cobre estrutura, como depreciação de equipamento, manutenção, mobiliário, imóvel, aluguel e folha de pagamento. NÃO cobre material descartável nem acessório: esses são negociados fora da tabela, diretamente entre as partes.',
+        fonte: 'CBHPM 2018, item 1.3 · relatório seção 3.2',
       },
       {
-        texto: 'Nº de Auxiliares: quantos médicos auxiliares o procedimento tem previsto, e o percentual que cada um recebe sobre o PORTE do cirurgião — nunca sobre porte + UCO.',
-        fonte: 'CBHPM, item 5.1 — relatório seções 2.1 e 2.2',
+        texto: 'Nº de Auxiliares: quantos médicos auxiliares o procedimento tem previsto, e o percentual que cada um recebe sobre o PORTE do cirurgião, nunca sobre porte + UCO.',
+        fonte: 'CBHPM, item 5.1 · relatório seções 2.1 e 2.2',
       },
       {
         texto: 'Porte Anestésico: escala própria de 0 a 8 (0 = não participação do anestesiologista), com correspondência para um porte CBHPM equivalente, usada para remunerar o anestesista.',
-        fonte: 'CBHPM, Instruções Gerais Específicas para a Anestesiologia, item 2 — relatório seção 3.5',
+        fonte: 'CBHPM, Instruções Gerais Específicas para a Anestesiologia, item 2 · relatório seção 3.5',
       },
     ],
   },
@@ -69,20 +74,16 @@ export const TOPICOS = [
     titulo: 'Modificadores',
     paragrafos: [
       {
-        texto: '"Horário especial" não é um termo da CBHPM — não aparece em nenhuma das 7 edições que este sistema cobre. O nome oficial é "Atendimento de Urgência e Emergência".',
-        fonte: 'Busca exaustiva nas 7 edições — relatório seção 1.1',
-      },
-      {
         texto: 'A regra: atos médicos em caráter de urgência ou emergência recebem acréscimo de 30% sobre o porte, entre 19h e 7h do dia seguinte, ou em qualquer horário aos sábados, domingos e feriados. Quando o atendimento começa no período normal e termina no período de urgência, o acréscimo só se aplica se mais da metade do procedimento foi feita no horário de urgência.',
-        fonte: 'CBHPM 2018, Instruções Gerais, item 2.1 (regra da metade ausente na 3ª edição) — relatório seção 1.2',
+        fonte: 'CBHPM 2018, Instruções Gerais, item 2.1 (regra da metade ausente na 3ª edição) · relatório seção 1.2',
       },
       {
         texto: 'O gatilho é o CARÁTER do atendimento, não o relógio: um procedimento eletivo feito às 22h não recebe o adicional. O acréscimo incide só sobre o porte, nunca sobre UCO ou o restante da conta.',
-        fonte: 'CBHPM 2018, Instruções Gerais, item 2.1 — relatório seção 1.2',
+        fonte: 'CBHPM 2018, Instruções Gerais, item 2.1 · relatório seção 1.2',
       },
       {
         texto: 'Via de acesso, quando há mais de um procedimento no mesmo ato: mesma via de acesso, maior porte + 50% de cada um dos demais; vias diferentes, porte principal + 70% de cada um dos demais; cirurgia bilateral segue a mesma regra conforme a incisão; ato que é parte integrante de outro conta só o principal, não os dois.',
-        fonte: 'CBHPM, item 4 das Instruções Gerais — relatório seção 3.6 (numeração de item varia entre edições — conferir sempre a edição específica antes de citar o número)',
+        fonte: 'CBHPM, item 4 das Instruções Gerais · relatório seção 3.6 (numeração de item varia entre edições: conferir sempre a edição específica antes de citar o número)',
       },
     ],
   },
@@ -92,19 +93,11 @@ export const TOPICOS = [
     paragrafos: [
       {
         texto: 'Auxiliares de cirurgia (edições 3ª a 2016): 30% da valoração do porte do cirurgião para o 1º auxiliar, 20% para o 2º e 3º, e também 20% para o 4º quando o caso exigir.',
-        fonte: 'CBHPM, item 5.1 (texto da 2016) — relatório seção 2.1',
+        fonte: 'CBHPM, item 5.1 (texto da 2016) · relatório seção 2.1',
       },
       {
-        texto: 'Auxiliares de cirurgia (edições 2018 e 2022): 60% para o 1º auxiliar, 40% para o 2º, 30% para o 3º e também para o 4º quando o caso exigir.',
-        fonte: 'CBHPM, item 5.1 (texto da 2018) — relatório seção 2.1',
-      },
-      {
-        texto: 'A CBHPM não publica nenhum critério geral de "por que" um procedimento paga ou não paga auxiliar. O número é atribuição normativa por procedimento, feita pelas Sociedades Brasileiras de Especialidade, e publicada como coluna da própria tabela — não uma decisão clínica caso a caso.',
-        fonte: 'Verificação exaustiva nas edições disponíveis — relatório seção 2.4',
-      },
-      {
-        texto: 'Anestesista: remunerado pelo Porte Anestésico do procedimento (ver tópico "Os Quatro Números de uma Linha"), nunca somado ao honorário do cirurgião nem apresentado como um "valor total do procedimento" — essa soma não existe nesta fonte.',
-        fonte: 'CBHPM, Instruções Gerais Específicas para a Anestesiologia — relatório seção 3.5',
+        texto: 'A CBHPM não publica nenhum critério geral de "por que" um procedimento paga ou não paga auxiliar. O número é atribuição normativa por procedimento, feita pelas Sociedades Brasileiras de Especialidade, e publicada como coluna da própria tabela, não uma decisão clínica caso a caso.',
+        fonte: 'Verificação exaustiva nas edições disponíveis · relatório seção 2.4',
       },
     ],
   },
