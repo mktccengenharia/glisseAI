@@ -132,6 +132,72 @@ describe('AC1 — regressão "Intra-operatório" (valor_uco null exibia 0)', () 
   })
 })
 
+// Story 1.7 — valor em R$ do porte anestésico. Replica a lógica de
+// ProcedureCard (src/app/page.jsx) para o bloco "Porte Anestésico", mesmo
+// padrão de derivarCard acima (débito conhecido — TEST-001 da Story 1.6).
+describe('Story 1.7 — valor em R$ do porte anestésico', () => {
+  function derivarPorteAnestesico(item) {
+    const porteAnestesico = item.porte_anestesico ?? null
+    const valorPorteAnestesico = item.valor_porte_anestesico ?? null
+    const anestesia = item.anestesia || '0'
+    if (porteAnestesico !== null && porteAnestesico !== 0) {
+      return {
+        texto: `${porteAnestesico} · ${isAusente(valorPorteAnestesico) ? NAO_CONSTA : formatValorBRL(valorPorteAnestesico)}`,
+        rotulo: 'Valor do anestesista',
+      }
+    }
+    return {
+      texto: porteAnestesico !== null ? String(porteAnestesico) : (anestesia !== '0' ? anestesia : 'Sem anestesia'),
+      rotulo: null,
+    }
+  }
+
+  it('AC3: porte_anestesico com valor cadastrado exibe código · R$ e rotula "Valor do anestesista"', () => {
+    const card = derivarPorteAnestesico({ porte_anestesico: 4, valor_porte_anestesico: 608 })
+    expect(card.texto).toMatch(/^4 · R\$\s?608,00$/)
+    expect(card.rotulo).toBe('Valor do anestesista')
+  })
+
+  it('AC3: porte_anestesico sem valor cadastrado na edição exibe "Não consta na fonte", nunca R$ 0,00', () => {
+    const card = derivarPorteAnestesico({ porte_anestesico: 4, valor_porte_anestesico: null })
+    expect(card.texto).toBe(`4 · ${NAO_CONSTA}`)
+    expect(card.texto).not.toContain('0,00')
+  })
+
+  // Comportamento PRESERVADO de propósito (AC3: "mantém o comportamento atual
+  // para porte_anestesico === 0"): o ternário original de page.jsx só cai no
+  // texto de `anestesia` quando porteAnestesico é null — para 0 (código válido,
+  // "não participação do anestesiologista"), sempre mostrou o código bruto "0",
+  // nunca "Sem anestesia". A Story 1.7 não muda esse comportamento, só evita
+  // tentar buscar/mostrar um valor em R$ para ele.
+  it('AC3: porte_anestesico 0 mantém o código bruto "0" (comportamento pré-existente), sem valor em R$', () => {
+    const card = derivarPorteAnestesico({ porte_anestesico: 0, valor_porte_anestesico: null, anestesia: '0' })
+    expect(card.texto).toBe('0')
+    expect(card.rotulo).toBeNull()
+  })
+
+  it('AC3: porte_anestesico ausente cai no texto de anestesia existente (sem regredir)', () => {
+    expect(derivarPorteAnestesico({ porte_anestesico: null, anestesia: '0' }).texto).toBe('Sem anestesia')
+    expect(derivarPorteAnestesico({ porte_anestesico: null, anestesia: 'Geral' }).texto).toBe('Geral')
+  })
+
+  // Regressão de UX-001 (Story 1.6): dois campos que pareciam a mesma coisa
+  // já geraram confusão real no card. O valor do anestesista nunca deve
+  // incorporar nem se confundir com o valor do porte do cirurgião.
+  it('AC3: valor do anestesista nunca soma nem se confunde com valor_porte do cirurgião', () => {
+    const card = derivarPorteAnestesico({
+      porte_anestesico: 4,
+      valor_porte_anestesico: 608,
+      // valor_porte (cirurgião) é um número bem diferente — se a lógica
+      // somasse ou vazasse esse valor, o teste abaixo pegaria.
+      valor_porte: 1500,
+    })
+    expect(card.texto).toMatch(/^4 · R\$\s?608,00$/)
+    expect(card.texto).not.toContain('1500')
+    expect(card.texto).not.toContain('2108') // 608 + 1500, se alguém somar por engano
+  })
+})
+
 describe('AC2 — campos do Capítulo 4', () => {
   const itemRadiologia = {
     custo_operacional: 1.2,

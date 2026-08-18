@@ -72,7 +72,17 @@ export async function POST(request) {
       if (p.porte_anestesico === null || p.porte_anestesico === undefined) {
         return '  Porte Anestésico: Não consta na fonte para este código'
       }
-      return `  Porte Anestésico: ${p.porte_anestesico}${p.porte_anestesico === 0 ? ' (0 = não participação do anestesiologista)' : ''}`
+      if (p.porte_anestesico === 0) {
+        return '  Porte Anestésico: 0 (0 = não participação do anestesiologista)'
+      }
+      // Story 1.7: valor em R$ já calculado por /api/search (não repetir o
+      // lookup aqui — ver comentário em /api/search/route.js). Rotulagem
+      // obrigatória: é o valor do ANESTESISTA, nunca somado ao honorário do
+      // cirurgião nem apresentado como valor total do procedimento.
+      const valor = typeof p.valor_porte_anestesico === 'number'
+        ? formatR$(p.valor_porte_anestesico)
+        : 'Não consta na fonte para este código'
+      return `  Porte Anestésico: ${p.porte_anestesico} — Valor do anestesista: ${valor} (remuneração exclusiva do anestesista; NUNCA somar ao valor do porte do cirurgião nem apresentar como "valor total do procedimento" — essa soma não existe nesta fonte)`
     }
 
     const ausente = (v) => v === null || v === undefined
