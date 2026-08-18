@@ -1,0 +1,128 @@
+schema: 1
+story: '1.7'
+story_title: 'Valor em R$ do Porte Anestésico'
+gate: CONCERNS
+status_reason: >-
+  Os 5 ACs foram verificados independentemente no código (não só no relato do @dev) e passam.
+  O mapeamento porte_anestesico -> porte CBHPM confere exatamente com a fonte oficial citada
+  (docs/research/2026-08-17-fundamentos-faturamento-cbhpm/02-research-report.md#3.5), a busca
+  por edição está correta (nunca cruza valor de outra edição), e a rotulagem "valor do
+  anestesista" está presente no card e no chat, sem soma a outro total. Ressalva não bloqueante:
+  verificação em navegador real não foi possível nesta sessão (sem ferramenta disponível).
+reviewer: 'Quinn (Test Architect)'
+reviewed_revision: 'commit:bad679a (branch feat/1.7-valor-porte-anestesico, local, não mesclada ainda com main)'
+updated: '2026-08-18T16:10:00Z'
+
+quality_checks:
+  code_review: PASS
+  unit_tests: PASS
+  acceptance_criteria: PASS
+  no_regressions: PASS
+  performance: PASS
+  security: PASS
+  documentation: PASS
+
+evidence:
+  lint: 'npm run lint — sem warnings/erros (executado pelo QA, independente do relato do @dev)'
+  tests: 'npm test — 120/120 passando (executado pelo QA na branch com 1.7+1.8 mescladas; 95 eram só da 1.7)'
+  build: 'npm run build a partir de .next limpo — verde'
+  mapeamento_conferido: >-
+    PORTE_ANESTESICO_PARA_CBHPM em src/app/api/search/route.js:121-130 comparado caractere a
+    caractere contra a tabela do relatório de pesquisa, seção 3.5 (1=3A, 2=3C, 3=4C, 4=6B, 5=7C,
+    6=9B, 7=10C, 8=12A) — idêntico. Confirmado que a correspondência da Rivio (rejeitada pela
+    pesquisa) não aparece em nenhum lugar do código.
+  busca_por_edicao: >-
+    attachValorPorteAnestesico (route.js:145-172) constrói a chave de lookup como
+    `${row.versao}|${row.codigo_porte}` a partir das linhas REAIS devolvidas pelo Supabase, não
+    do filtro `.in()` bruto — mesmo que o filtro devolva combinações de versão/código que não
+    formam um par real, o Map só é populado com pares que de fato existem no banco. Sem risco de
+    cruzar valor de uma edição errada.
+  fonte_unica_do_lookup: >-
+    Confirmado em page.jsx:367-386 que o client passa searchData.results direto como `procedures`
+    para POST /api/chat — porteAnestesicoLine (chat/route.js:71-86) só LÊ p.valor_porte_anestesico,
+    não refaz a busca. Union verificada, não é suposição do @dev.
+
+ac_verification:
+  AC1:
+    status: PASS
+    note: 'Mapeamento estático com os 9 valores corretos (0 tratado à parte). Fonte citada no comentário do código.'
+  AC2:
+    status: PASS
+    note: >-
+      Lookup em cbhpm_porte_valores filtrado por edição, best-effort (erro de rede não derruba a
+      busca — testado em search-route.test.js com state.porteValoresError). Testes cobrem null,
+      0, edição sem valor cadastrado, e edição errada (não cruza).
+  AC3:
+    status: PASS
+    note: >-
+      page.jsx:194-206 — valor exibido só quando porte_anestesico não é null/0, rótulo "Valor do
+      anestesista" sempre visível junto, "Não consta na fonte" quando o valor não existe na
+      edição. Teste de regressão explícito (aprendizado... não, procedure-display.test.js) garante
+      que o valor não soma nem se confunde com valor_porte do cirurgião.
+  AC4:
+    status: PASS
+    note: >-
+      porteAnestesicoLine inclui o valor com o rótulo certo; system prompt (chat/route.js:128)
+      proíbe explicitamente somar. Confirmado com teste que captura o corpo real enviado à Groq
+      (mock de fetch), não uma suposição sobre o que o código "deveria" gerar.
+  AC5:
+    status: PASS
+    note: '16 testes novos cobrindo os 9 valores do mapeamento, ausência de dado, e falha do lookup. Lint/test/build verdes.'
+
+top_issues:
+  - id: 'TEST-003'
+    severity: low
+    category: tests
+    finding: >-
+      Verificação em navegador real (clicar, ver o card renderizado com o valor novo) não foi
+      feita nesta sessão — não há ferramenta de automação de navegador disponível. A verificação
+      foi feita via curl contra o servidor de desenvolvimento real (dado real de produção, não
+      mock) e via testes automatizados da lógica de decisão (mesmo padrão da Story 1.6, TEST-001).
+    suggested_action: 'Uma passada visual manual no navegador antes do deploy é recomendada, não bloqueante.'
+  - id: 'DOC-002'
+    severity: low
+    category: docs
+    finding: >-
+      attachValorPorteAnestesico usa concatenação de string (`versao|codigo_porte`) como chave
+      composta do Map. Funciona corretamente porque nenhum valor de `versao` contém "|", mas é um
+      padrão frágil se um dado futuro introduzir esse caractere.
+    suggested_action: 'Trocar por uma chave estruturada (ex: Map aninhado ou array de tuplas) se o padrão for reaproveitado em outro lugar. Não vale reescrever só por isso agora.'
+
+dev_decisions_review:
+  - decision: 'Lookup só em /api/search, não duplicado em /api/chat'
+    verdict: 'Correta e verificada — page.jsx confirma que /api/chat recebe o resultado pronto.'
+  - decision: 'RESPONSE_FIELDS separado de RESULT_FIELDS'
+    verdict: >-
+      Correta e necessária: RESULT_FIELDS vira SELECT_COLUMNS da query real no Supabase — incluir
+      um campo calculado lá quebraria a busca (coluna inexistente). Boa pega evitar isso antes de
+      testar contra o banco real.
+  - decision: 'porte_anestesico === 0 mostra código bruto "0", não "Sem anestesia"'
+    verdict: >-
+      Desvio do texto literal do AC3, mas correto: o @dev conferiu o comportamento PRÉ-EXISTENTE
+      real (não o que o AC presumia) e preservou-o, seguindo a instrução central do próprio AC
+      ("mantém o comportamento atual"). Documentado com transparência no Dev Agent Record e em
+      teste. Aprovado.
+
+no_invention_check:
+  article_iv: PASS
+  note: >-
+    Mapeamento com fonte primária citada, rejeitando explicitamente a fonte de terceiro
+    incorreta (Rivio). Rotulagem "valor do anestesista" impede a leitura de um total inexistente.
+    Nenhum valor é inventado para edição sem dado cadastrado — vira "Não consta na fonte".
+
+blocked_by_external:
+  - >-
+    Achado durante a verificação da Story 1.8 (mesma branch): o modelo `llama-3.1-8b-instant`
+    usado por /api/chat não existe mais na API da Groq. Isso não afeta esta story diretamente
+    (o valor aparece corretamente no `system prompt` construído, verificado por teste com mock de
+    fetch), mas impede confirmar manualmente a resposta real da LLM em produção até ser corrigido.
+
+waiver: { active: false }
+
+recommendation:
+  next_agent: '@devops'
+  next_command: '*push'
+  note: >-
+    Nenhum bloqueio. Recomendo abrir item novo no opportunity-mapping.md para o modelo da Groq
+    quebrado (acompanha o registro já feito no File List da Story 1.8) antes de considerar o chat
+    (qualquer modo) pronto para uso real.

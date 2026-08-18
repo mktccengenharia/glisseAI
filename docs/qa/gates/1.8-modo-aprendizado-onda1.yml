@@ -1,0 +1,169 @@
+schema: 1
+story: '1.8'
+story_title: 'Modo de Aprendizado Interativo — Onda 1'
+gate: CONCERNS
+status_reason: >-
+  Os 6 ACs foram verificados independentemente contra o código e o relatório de pesquisa
+  original (não só contra o relato do @dev). Conteúdo dos 4 blocos revisado linha a linha contra
+  docs/research/2026-08-17-fundamentos-faturamento-cbhpm/02-research-report.md — nenhuma
+  afirmação encontrada sem fonte, nenhuma violação das 4 restrições do Artigo IV. Pergunta
+  ancorada por tópico valida topicoId no servidor contra lista fixa, não aceita texto livre.
+  Duas ressalvas não bloqueantes: verificação visual em navegador não foi possível nesta sessão,
+  e um bug pré-existente e não relacionado (modelo da Groq) impede confirmar a resposta real da
+  LLM em produção — ambos já registrados com transparência pelo próprio @dev no File List.
+reviewer: 'Quinn (Test Architect)'
+reviewed_revision: 'commit:3ef1a0e (branch feat/1.8-modo-aprendizado-onda1, local, inclui a 1.7 mesclada)'
+updated: '2026-08-18T16:15:00Z'
+
+quality_checks:
+  code_review: PASS
+  unit_tests: PASS
+  acceptance_criteria: PASS
+  no_regressions: PASS
+  performance: PASS
+  security: CONCERNS
+  documentation: PASS
+
+evidence:
+  lint: 'npm run lint — sem warnings/erros (executado pelo QA)'
+  tests: 'npm test — 120/120 passando (executado pelo QA)'
+  build: 'npm run build a partir de .next limpo — verde, rota /aprender gerada como página estática'
+  conteudo_conferido_linha_a_linha: >-
+    Os 16 parágrafos de src/lib/aprendizado-content.js comparados individualmente contra as
+    seções citadas do relatório (3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 1.1, 1.2, 2.1, 2.2, 2.4).
+    Nenhuma afirmação sem correspondência na fonte. A regra da metade (item 2.1.3, ausente na 3ª
+    edição) e a numeração defasada do item de via de acesso (seção 3.6) estão corretamente
+    carregadas como ressalva, não perdidas na paráfrase.
+  restricoes_artigo_iv_testadas: >-
+    tests/aprendizado-content.test.js verifica programaticamente as 4 restrições do AC3 (não só
+    por leitura humana): "horário especial" só aparece para negar que seja termo oficial;
+    "Atendimento de Urgência e Emergência" está presente; bloco de auxiliares nunca usa
+    linguagem de justificativa clínica ("porque é/exige/precisa/requer"); nenhuma menção a
+    "valor total do procedimento" fora do contexto de negação.
+  grounding_do_chat_ancorado: >-
+    tests/chat-route.test.js confirma, capturando o corpo real enviado à Groq (mock de fetch,
+    não suposição), que topicoId válido troca o system prompt inteiro para o modo professor,
+    que o material do tópico correto é injetado, que topicoId inválido nunca chega a montar
+    prompt nenhum (retorna 400 antes), e que os 4 tópicos produzem prompt corretamente.
+  dado_real_ponta_a_ponta: >-
+    /api/search?q=3.02.05.28-0&version=CBHPM%202018 (o exemplo usado pelos 4 blocos) devolve
+    porte 11B/R$2122,89, UCO 38.5/R$788,09, 3 auxiliares e porte anestésico 6/R$1412,69 (via
+    Story 1.7) — confirmado contra o Supabase de produção, não mock.
+
+ac_verification:
+  AC1:
+    status: PASS
+    note: 'Rota /aprender existe, HTML renderizado confirmado via curl com os 4 títulos e o aviso de material de estudo, permanente (não condicional).'
+  AC2:
+    status: PASS
+    note: '4 blocos, cada parágrafo com fonte citando seção do relatório. Conferido linha a linha (ver evidence).'
+  AC3:
+    status: PASS
+    note: 'As 4 restrições travadas em teste programático, não só em revisão manual.'
+  AC4:
+    status: PASS
+    note: >-
+      Exemplo real único reaproveitado nos 4 blocos (decisão do @dev, documentada e válida —
+      cobre "pelo menos um real por bloco"). Cálculo de auxiliares reaproveita valorAuxiliar
+      (extraído de page.jsx, não duplicado). Acréscimo de urgência do Bloco 3 corretamente
+      rotulado como ilustrativo, sem afirmar que o procedimento do exemplo foi urgente de
+      verdade — ponto sensível de Article IV que o @dev tratou com o cuidado certo.
+  AC5:
+    status: CONCERNS
+    note: >-
+      Implementação e grounding verificados via teste com mock (ver evidence). A resposta REAL
+      de uma LLM de verdade não pôde ser confirmada em produção porque o modelo da Groq usado
+      pela rota não existe mais (ver top_issues BUG-001) — achado do próprio @dev, não escondido.
+  AC6:
+    status: PASS
+    note: 'lint, test e build verdes, verificados independentemente pelo QA.'
+
+top_issues:
+  - id: 'BUG-001'
+    severity: high
+    category: infra
+    finding: >-
+      O modelo `llama-3.1-8b-instant` usado em /api/chat (linha do fetch para a Groq) não existe
+      mais na API — reproduzido pelo QA: POST /api/chat retorna 502 com
+      "The model `llama-3.1-8b-instant` does not exist or you do not have access to it"
+      (model_not_found). Isso derruba o chat inteiro: modo de busca normal E o modo ancorado
+      desta story, igualmente.
+    analysis: >-
+      NÃO é causado por esta story nem pela Story 1.7 — reproduzido também no caminho de chat
+      sem topicoId, código que nenhuma das duas stories tocou na linha do fetch/modelo. É uma
+      quebra de produção pré-existente, só descoberta agora porque esta story testou o chat de
+      ponta a ponta pela primeira vez em bom tempo.
+    suggested_action: >-
+      Abrir item de prioridade ALTA em opportunity-mapping.md — atualizar o nome do modelo na
+      Groq (ex.: para uma versão atual da família Llama 3.1/3.3 disponível na API) antes de
+      considerar QUALQUER funcionalidade de chat pronta para uso real. Encaminhar ao @pm para
+      priorização; é @dev quem corrige.
+  - id: 'TEST-004'
+    severity: low
+    category: tests
+    finding: >-
+      Verificação visual em navegador real (clicar entre tópicos, ver o exemplo carregar após o
+      fetch assíncrono, receber e ler uma resposta real da pergunta ancorada) não foi feita —
+      sem ferramenta de automação de navegador disponível na sessão.
+    suggested_action: >-
+      Passada manual no navegador antes do deploy, cobrindo o fluxo completo (troca de tópico,
+      carregamento do exemplo, envio de pergunta). Não bloqueante: a lógica de decisão e o
+      grounding do chat estão travados em teste determinístico: o que falta é confirmação visual
+      de estilo/layout e da experiência assíncrona.
+  - id: 'SEC-001'
+    severity: low
+    category: security
+    finding: >-
+      /api/chat aceita `topicoId` e valida contra a lista fixa de TOPICOS no servidor (bom) — mas
+      não há teste explícito confirmando que um `topicoId` de tipo não-string (ex: um objeto ou
+      array, tentando bypass de `typeof topicoId === 'string'`) é tratado com segurança.
+    analysis: >-
+      Revisão de código confirma que a validação (`typeof topicoId === 'string' ? TOPICOS.find(...) : null`)
+      já cobre esse caso corretamente — qualquer valor não-string cai em `topico = null`, que
+      então falha a checagem seguinte (`topicoId !== undefined && !topico`) e retorna 400. Não é
+      uma vulnerabilidade real, só uma lacuna de teste explícito para esse caso específico.
+    suggested_action: 'Adicionar um teste com topicoId: {} ou [] na próxima iteração, se a rota crescer.'
+
+dev_decisions_review:
+  - decision: 'Estender /api/chat com topicoId em vez de criar /api/learn-chat'
+    verdict: >-
+      Correta. Reaproveita rate limiting e toda a infraestrutura de chamada à Groq; menos
+      superfície nova. A validação server-side do topicoId contra lista fixa é o detalhe de
+      segurança certo — impede o client de injetar "contexto de lição" livre.
+  - decision: 'Navegação client-side por estado, sem sub-rotas por tópico'
+    verdict: 'Correta para 4 tópicos fixos. Documentada como decisão localizada se a onda 2 justificar deep-link no futuro.'
+  - decision: 'Um único exemplo real reaproveitado nos 4 blocos'
+    verdict: 'Aceitável — reduz complexidade sem violar o AC4, que pede "pelo menos um" real por bloco, não um diferente por bloco.'
+  - decision: 'Cálculo de urgência do Bloco 3 rotulado como ilustrativo'
+    verdict: >-
+      Correta e é o ponto mais sensível de Article IV desta story — o banco não tem campo de
+      "caráter do atendimento", então afirmar que o exemplo foi urgente de verdade seria
+      inventar dado. O texto deixa isso explícito, no mesmo espírito do "Exemplo de cálculo, não
+      norma" já usado pela própria pesquisa.
+  - decision: 'Mesclar a branch da Story 1.7 localmente antes de terminar a 1.8'
+    verdict: 'Correta — evita reconciliar duas mudanças no mesmo arquivo (chat/route.js) depois, e o Bloco 4 ganha o valor real de porte anestésico sem esforço extra.'
+
+no_invention_check:
+  article_iv: PASS
+  note: >-
+    Todo o conteúdo tem fonte rastreável ao relatório de pesquisa (fonte primária, PDFs oficiais).
+    As 4 restrições específicas do AC3 estão implementadas E travadas em teste, não só descritas
+    em prosa. O cálculo ilustrativo do Bloco 3 é o ponto de maior risco de Article IV desta story
+    e foi tratado corretamente (rotulado, nunca apresentado como fato sobre o procedimento real).
+
+blocked_by_external:
+  - >-
+    BUG-001 (modelo da Groq inexistente) impede validar a resposta real de uma LLM tanto para
+    esta story quanto para o chat normal já em produção. Não bloqueia o gate desta story (a
+    implementação está correta e testada até a fronteira da chamada externa), mas bloqueia
+    qualquer confiança na experiência real até ser corrigido.
+
+waiver: { active: false }
+
+recommendation:
+  next_agent: '@devops'
+  next_command: '*push'
+  note: >-
+    Nenhum bloqueio para push. BUG-001 deve virar item de prioridade alta no
+    opportunity-mapping.md antes da próxima sessão — o chat (busca normal e modo de aprendizado)
+    está funcionalmente fora do ar para qualquer usuário real até o modelo da Groq ser corrigido.
