@@ -1,6 +1,6 @@
 "use client"
 import React, { useState, useRef, useCallback } from 'react'
-import { LucideSend, LucideClipboard, LucideCheck, LucideChevronDown, LucideThumbsUp, LucideThumbsDown, LucideArrowLeft } from 'lucide-react'
+import { LucideSend, LucideClipboard, LucideCheck, LucideChevronDown, LucideThumbsUp, LucideThumbsDown, LucideArrowLeft, LucideGraduationCap } from 'lucide-react'
 import {
   NAO_CONSTA,
   formatValorBRL,
@@ -500,13 +500,20 @@ export default function GlisseAI() {
           {renderInputBar(true)}
         </div>
 
-        {/* Seletor de Versão */}
-        <div className="flex justify-start w-full max-w-xl">
+        {/* Seletor de Versão + entrada para o Modo de Aprendizado (Story 1.8) */}
+        <div className="flex items-center justify-between w-full max-w-xl">
           <VersionSelector
             versions={versions}
             selectedVersion={selectedVersion}
             onChange={setSelectedVersion}
           />
+          <a
+            href="/aprender"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-full hover:border-gray-400 hover:text-black transition-colors bg-white"
+          >
+            <LucideGraduationCap className="w-3.5 h-3.5" />
+            Modo de Aprendizado
+          </a>
         </div>
       </div>
     )
@@ -533,11 +540,20 @@ export default function GlisseAI() {
               Glisse AI
             </h1>
           </div>
-          <VersionSelector
-            versions={versions}
-            selectedVersion={selectedVersion}
-            onChange={setSelectedVersion}
-          />
+          <div className="flex items-center gap-2">
+            <a
+              href="/aprender"
+              title="Modo de Aprendizado"
+              className="flex items-center justify-center w-8 h-8 rounded-full text-gray-500 hover:text-black hover:bg-gray-50 transition-colors"
+            >
+              <LucideGraduationCap className="w-4 h-4" />
+            </a>
+            <VersionSelector
+              versions={versions}
+              selectedVersion={selectedVersion}
+              onChange={setSelectedVersion}
+            />
+          </div>
         </div>
       </header>
 
