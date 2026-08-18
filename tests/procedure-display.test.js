@@ -16,7 +16,26 @@ import {
   isResultadoAproximado,
   MAX_CARDS_EXIBIDOS,
   MATCH_SEMANTICO,
+  DEFAULT_AUX_PCT,
+  valorAuxiliar,
 } from '../src/lib/procedure-display.js'
+
+// Story 1.8: extraído de ProcedureCard (page.jsx) para reaproveitar no
+// exemplo ao vivo do modo de aprendizado, sem duplicar a fórmula.
+describe('valorAuxiliar / DEFAULT_AUX_PCT (extraído para a Story 1.8)', () => {
+  it('percentual sobre o PORTE, nunca porte + custo operacional', () => {
+    expect(valorAuxiliar(1000, 0.3)).toBe(300)
+  })
+
+  it('valor_porte ausente não vira 0 (null * pct)', () => {
+    expect(valorAuxiliar(null, 0.3)).toBeNull()
+    expect(valorAuxiliar(undefined, 0.3)).toBeNull()
+  })
+
+  it('DEFAULT_AUX_PCT é o percentual pré-2018 (30/20/20/20)', () => {
+    expect(DEFAULT_AUX_PCT).toEqual([0.3, 0.2, 0.2, 0.2])
+  })
+})
 
 describe('AC1 — null (não consta na fonte) nunca vira zero', () => {
   it('trata null e undefined como ausentes, mas 0 como dado presente', () => {

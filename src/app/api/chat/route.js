@@ -2,6 +2,7 @@
 // Usada para processar consultas via Groq (OpenAI-compatible) + dados do Supabase
 
 import { rateLimit } from '@/lib/rate-limit'
+import { TOPICOS } from '@/lib/aprendizado-content'
 
 export async function POST(request) {
   const { allowed, retryAfterSeconds } = rateLimit(request, {
@@ -17,13 +18,24 @@ export async function POST(request) {
   }
 
   try {
-    const { query, procedures } = await request.json()
+    const { query, procedures, topicoId } = await request.json()
 
     if (typeof query !== 'string' || !query.trim() || query.length > 2000) {
       return Response.json({ error: 'Parâmetros inválidos' }, { status: 400 })
     }
 
     if (!Array.isArray(procedures) || procedures.length === 0 || procedures.length > 20) {
+      return Response.json({ error: 'Parâmetros inválidos' }, { status: 400 })
+    }
+
+    // Story 1.8 — modo de aprendizado: pergunta ancorada por tópico.
+    // `topicoId` nunca é texto livre do client — é validado contra a lista
+    // fixa de TOPICOS (src/lib/aprendizado-content.js), a mesma fonte que a
+    // tela /aprender usa para renderizar o conteúdo. O texto da lição em si
+    // nunca vem do client, só o ID: isso evita que um cliente injete
+    // "contexto de lição" arbitrário no system prompt.
+    const topico = typeof topicoId === 'string' ? TOPICOS.find((t) => t.id === topicoId) : null
+    if (topicoId !== undefined && !topico) {
       return Response.json({ error: 'Parâmetros inválidos' }, { status: 400 })
     }
 
@@ -106,7 +118,30 @@ export async function POST(request) {
       p.observacao ? `  Observação: ${p.observacao}` : '',
     ].filter(Boolean).join('\n')).join('\n\n')
 
-    const systemPrompt = `Você é o Glisse AI, um assistente especializado em cobranças médicas brasileiras.
+    // Story 1.8 — modo de aprendizado: quando `topico` está presente, o
+    // system prompt é outro (professor ancorado), não o de busca/faturamento
+    // normal. Grounding restrito ao texto do tópico (`aprendizado-content.js`,
+    // única fonte, citada no card de origem — validado contra o relatório de
+    // pesquisa) + aos dados reais do exemplo ao vivo já em procedureContext.
+    // Nunca conhecimento geral do modelo sobre faturamento médico.
+    const systemPrompt = topico
+      ? `Você é um professor do Glisse AI, ensinando faturamento médico CBHPM para alguém novo na área.
+
+REGRAS ABSOLUTAS DESTE MODO:
+- Responda SOMENTE com base no MATERIAL DA LIÇÃO e nos DADOS DO EXEMPLO abaixo. Nunca use conhecimento geral seu sobre faturamento médico, mesmo que pareça correto
+- Se a pergunta não puder ser respondida com o material abaixo, diga explicitamente algo como "isso não está no material deste tópico" e sugira que a pessoa confirme com quem já trabalha no setor — nunca invente uma resposta plausível
+- Cite a fonte de cada afirmação exatamente como aparece no material (ex: "CBHPM, item 5.1")
+- Nunca some Porte + Custo Operacional + valor do anestesista como se fosse um "valor total do procedimento" — essa soma não existe nesta fonte
+- Nunca explique "por que" um procedimento paga ou não paga auxiliar além do que o material diz (a CBHPM não publica esse critério)
+- Não use emojis, não use o caractere travessão (—)
+- Responda em português brasileiro, direto e objetivo
+
+MATERIAL DA LIÇÃO — "${topico.titulo}":
+${topico.paragrafos.map((p) => `- ${p.texto} (Fonte: ${p.fonte})`).join('\n')}
+
+DADOS DO EXEMPLO (procedimento real, mesma convenção de "Não consta na fonte" do resto do produto):
+${procedureContext}`
+      : `Você é o Glisse AI, um assistente especializado em cobranças médicas brasileiras.
 Você tem acesso aos dados exatos da tabela CBHPM. Sua função é apresentar essas informações de forma clara e precisa.
 
 REGRAS ABSOLUTAS:
@@ -115,6 +150,7 @@ REGRAS ABSOLUTAS:
 - Os valores em R$ de cada auxiliar já vêm calculados no contexto — NUNCA recalcule, apenas reproduza os números fornecidos
 - "Não consta na fonte" é diferente de "0": "0" significa que o código explicitamente não paga aquele item; "não consta" significa que a tabela de origem não trouxe esse dado para esse código. Nunca trate os dois casos como iguais nem responda com um número quando o dado for "não consta"
 - Se o usuário perguntar sobre atualidade dos valores, informe a vigência dos valores de porte mostrada no contexto (ex: "2020-2021") e recomende conferência, pois pode estar desatualizada
+- O "Valor do anestesista" (linha "Porte Anestésico") remunera exclusivamente o anestesista. NUNCA some esse valor ao "Valor do Porte" do cirurgião, ao valor de UCO, nem a qualquer outro campo — não existe "valor total do procedimento" nesta fonte, e apresentar uma soma inventaria um dado que a CBHPM não fornece
 - Não use emojis
 - Responda em português brasileiro
 - Seja direto e objetivo

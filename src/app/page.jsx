@@ -12,6 +12,8 @@ import {
   AVISO_RESULTADO_APROXIMADO,
   SELO_RESULTADO_APROXIMADO,
   MAX_CARDS_EXIBIDOS,
+  DEFAULT_AUX_PCT,
+  valorAuxiliar,
 } from '@/lib/procedure-display'
 
 // ─── Utilitários ───────────────────────────────────────────────────────────
@@ -141,7 +143,7 @@ function ProcedureCard({ item, aproximado = false }) {
   const porteAnestesico = item.porte_anestesico ?? null
   // Percentual de rateio muda por edição (60/40/30/30 na 2018, 30/20/20/20 nas
   // demais) — vem do próprio registro, com fallback só para dado antigo.
-  const AUX_PCT = Array.isArray(item.aux_pct) && item.aux_pct.length ? item.aux_pct : [0.3, 0.2, 0.2, 0.2]
+  const AUX_PCT = Array.isArray(item.aux_pct) && item.aux_pct.length ? item.aux_pct : DEFAULT_AUX_PCT
 
   return (
     <div className="mt-3 border border-gray-100 rounded-2xl overflow-hidden bg-white shadow-sm">
@@ -199,10 +201,8 @@ function ProcedureCard({ item, aproximado = false }) {
               <ul className="text-sm text-black space-y-0.5">
                 {Array.from({ length: numeroAuxiliares }, (_, j) => (
                   <li key={j}>
-                    {/* Sem valor de porte não há como calcular o rateio: não
-                        inventar "R$ 0,00" (null * pct daria 0). */}
                     {j + 1}º auxiliar · {AUX_PCT[j] * 100}% ·{' '}
-                    {isAusente(valorPorte) ? NAO_CONSTA : formatValorBRL(valorPorte * AUX_PCT[j])}
+                    {formatValorBRL(valorAuxiliar(valorPorte, AUX_PCT[j]))}
                   </li>
                 ))}
               </ul>

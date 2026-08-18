@@ -31,6 +31,21 @@ export function formatValorBRL(value) {
   return Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
+// Percentual de rateio de auxiliares por edição: 30/20/20/20 até 2016,
+// 60/40/30/30 na 2018 (CBHPM, item 5.1 — ver docs/research/2026-08-17-
+// -fundamentos-faturamento-cbhpm/02-research-report.md seção 2.1). Vem do
+// próprio registro (`aux_pct`); este é só o fallback para registro antigo
+// sem esse campo populado.
+export const DEFAULT_AUX_PCT = [0.3, 0.2, 0.2, 0.2]
+
+// Valor de UM auxiliar: percentual sobre o PORTE do cirurgião — nunca sobre
+// porte + custo operacional (relatório seção 2.2, "a base de cálculo é o
+// PORTE, não o total do procedimento"). null quando valor_porte for ausente,
+// para não inventar 0 a partir de `null * pct` (Story 1.6, AC1).
+export function valorAuxiliar(valorPorte, pct) {
+  return isAusente(valorPorte) ? null : valorPorte * pct
+}
+
 // Campos numéricos SEM unidade monetária. `uco`, `custo_operacional` e
 // `custo_filme_doc` são multiplicadores da fonte, não valores em reais —
 // formatá-los como R$ seria inventar uma unidade que a CBHPM não dá.
