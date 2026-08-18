@@ -112,3 +112,66 @@ describe('Story 1.7 — AC4: valor do porte anestésico no contexto do chat', ()
     expect(systemMsg.toLowerCase()).toContain('nunca some esse valor')
   })
 })
+
+describe('Story 1.8 — AC5: pergunta ancorada por tópico', () => {
+  it('topicoId válido troca para o system prompt de professor, com o material do tópico', async () => {
+    const { POST } = await loadRoute()
+    await POST(getPostRequest({
+      query: 'por que esse número de auxiliares?',
+      topicoId: 'quem-recebe',
+      procedures: [procedimentoBase()],
+    }))
+    const systemMsg = capturedBody.messages.find((m) => m.role === 'system').content
+    expect(systemMsg).toContain('professor do Glisse AI')
+    expect(systemMsg).toContain('MATERIAL DA LIÇÃO — "Quem Mais Recebe"')
+    // O texto do material vem só de aprendizado-content.js — checa uma
+    // afirmação real desse tópico, com a fonte citada junto.
+    expect(systemMsg).toContain('Sociedades Brasileiras de Especialidade')
+    expect(systemMsg).toMatch(/Fonte:.*relatório seção 2\.4/)
+  })
+
+  it('regra de grounding restrito e de não inventar está no system prompt do modo lição', async () => {
+    const { POST } = await loadRoute()
+    await POST(getPostRequest({
+      query: 'x',
+      topicoId: 'porte',
+      procedures: [procedimentoBase()],
+    }))
+    const systemMsg = capturedBody.messages.find((m) => m.role === 'system').content
+    expect(systemMsg.toLowerCase()).toContain('somente com base no material da lição')
+    expect(systemMsg.toLowerCase()).toContain('não está no material deste tópico')
+  })
+
+  it('topicoId inválido (fora da lista fixa) é rejeitado com 400, nunca vira prompt livre', async () => {
+    const { POST } = await loadRoute()
+    const res = await POST(getPostRequest({
+      query: 'x',
+      topicoId: 'topico-inventado-pelo-client',
+      procedures: [procedimentoBase()],
+    }))
+    expect(res.status).toBe(400)
+    expect(capturedBody).toBeNull() // nunca chegou a chamar a Groq
+  })
+
+  it('sem topicoId, mantém o system prompt normal de busca (comportamento não regride)', async () => {
+    const { POST } = await loadRoute()
+    await POST(getPostRequest({
+      query: 'x',
+      procedures: [procedimentoBase()],
+    }))
+    const systemMsg = capturedBody.messages.find((m) => m.role === 'system').content
+    expect(systemMsg).toContain('assistente especializado em cobranças médicas')
+    expect(systemMsg).not.toContain('professor do Glisse AI')
+  })
+
+  it('cada um dos 4 tópicos produz um system prompt válido com seu próprio título', async () => {
+    const { POST } = await loadRoute()
+    const { TOPICOS } = await import('../src/lib/aprendizado-content.js')
+    for (const t of TOPICOS) {
+      capturedBody = null
+      await POST(getPostRequest({ query: 'x', topicoId: t.id, procedures: [procedimentoBase()] }))
+      const systemMsg = capturedBody.messages.find((m) => m.role === 'system').content
+      expect(systemMsg).toContain(`MATERIAL DA LIÇÃO — "${t.titulo}"`)
+    }
+  })
+})
