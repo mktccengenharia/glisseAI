@@ -203,4 +203,17 @@ describe('2026-08-18 — modelo da Groq e formatação de saída', () => {
     const systemMsgLicao = capturedBody.messages.find((m) => m.role === 'system').content
     expect(systemMsgLicao.toLowerCase()).toContain('não use formatação markdown')
   })
+
+  // 2026-08-18 — achado na verificação visual pós-troca de modelo: busca com
+  // várias edições (ex: 7 procedimentos) voltava "Não foi possível processar
+  // a resposta" (content vazio) ou texto cortado no meio. Causa: sem
+  // reasoning_effort, o raciocínio interno do gpt-oss-20b consumia até 90% do
+  // max_tokens antes de escrever a resposta visível. Confirmado via API real
+  // que 'low' resolve (reasoning_tokens caiu de ~200 para ~10, finish_reason
+  // passou a "stop"). Travado em teste para não regredir silenciosamente.
+  it('pede reasoning_effort baixo à Groq (evita que o raciocínio interno consuma o orçamento de tokens da resposta)', async () => {
+    const { POST } = await loadRoute()
+    await POST(getPostRequest({ query: 'x', procedures: [procedimentoBase()] }))
+    expect(capturedBody.reasoning_effort).toBe('low')
+  })
 })

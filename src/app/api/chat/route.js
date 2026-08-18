@@ -209,6 +209,17 @@ ${procedureContext}`
           ],
           temperature: 0.1, // Baixo para respostas precisas e determinísticas
           max_tokens: 1024,
+          // 2026-08-18: achado na verificação visual pós-troca de modelo —
+          // busca com várias edições (ex: 7 procedimentos) voltava
+          // "Não foi possível processar a resposta" (content vazio) ou texto
+          // cortado no meio. Causa: sem este parâmetro, o raciocínio interno
+          // do gpt-oss-20b consumia até 90% do max_tokens antes de escrever a
+          // resposta visível, e com o contexto real (7 procedimentos) o
+          // orçamento acabava antes do texto terminar. Confirmado via API
+          // direta: reasoning_tokens caiu de ~200 para ~10 com este valor, e
+          // finish_reason passou de corte precoce para "stop" (resposta
+          // completa, todos os procedimentos listados, sem markdown).
+          reasoning_effort: 'low',
         }),
         signal: controller.signal,
       })
