@@ -1,10 +1,10 @@
 # Mapeamento de Oportunidades de Melhoria — Glisse AI (RAG CBHPM)
 
-**Version:** 1.1.0
+**Version:** 1.2.0
 **Status:** Draft
 **Owner:** @pm (Morgan)
 **Date:** 2026-08-12
-**Last updated:** 2026-08-13 (seção 6 — triagem do brainstorm de zero custo)
+**Last updated:** 2026-08-18 (seção 7 — modo de aprendizado interativo e correção de porte anestésico, a partir da pesquisa do @analyst)
 **Baseline:** Estado atual do `main` (commit `13dcf7c`) vs. `docs/prd.md` v1.0.0
 
 ---
@@ -247,6 +247,56 @@ Risco de execução a monitorar: seis itens pequenos numa story só diluem o cri
 
 **De carona em algo maior:**
 3.2 fundido com ZC-10 · 6.17 (ZC-17 c a g) · 6.15 (ZC-14) · 6.16 (ZC-13)
+
+---
+
+## 7. Modo de aprendizado interativo e correção de porte anestésico (2026-08-18)
+
+**Entrada:** pedido direto do usuário via `@aiox-master`, para uma funcionalidade nova — treinar faturistas novos no processo de faturamento CBHPM (porte, cálculo, horário especial, regras de auxiliar). Antes de escopar, encaminhei ao `@analyst` (Atlas) uma pesquisa de fundamentação, para não violar o Artigo IV (No Invention) com regra de faturamento inventada. Resultado em `docs/research/2026-08-17-fundamentos-faturamento-cbhpm/`, lendo os PDFs oficiais das 7 edições diretamente (fonte primária), com nível de confiança declarado por afirmação.
+
+**Decisão de formato:** validada com o usuário — página estruturada por tópicos (não epic de chat livre), cada tópico com explicação com fonte + exemplo real calculado ao vivo (puxando um procedimento do banco) + caixa de pergunta que responde ancorada só no conteúdo daquele tópico e em dados reais da CBHPM, nunca em LLM livre. Critério: um app que promete precisão determinística não pode ensinar com um chat sem grounding.
+
+### 7.1 Aprovado — item avulso, independente do modo de aprendizado
+
+| # | Item | Escopo aprovado | Evidência | Impacto | Esforço | Prioridade |
+|---|---|---|---|---|---|---|
+| 7.1 | **Valor em R$ do porte anestésico** | Exibir o valor em reais do ato anestésico no card e no chat, convertendo `porte_anestesico` (hoje só um código: 0-8) para o porte CBHPM equivalente e buscando o R$ em `cbhpm_porte_valores`, já usado para o porte cirúrgico. Rotular como valor do **anestesista**, nunca somado ao honorário do cirurgião nem a um "total do procedimento" (não existe). | Correspondência oficial porte anestésico → porte CBHPM (0=anestesia local, 1=3A, 2=3C, 3=4C, 4=6B, 5=7C, 6=9B, 7=10C, 8=12A), confirmada **idêntica em 8 edições** por leitura direta dos PDFs (`docs/research/2026-08-17-fundamentos-faturamento-cbhpm/03-recommendations.md`, seção 1.1). Um blog conhecido (Rivio) publica essa tabela **errada** — fonte rejeitada e registrada, nunca usar. | **Alto** — hoje o faturista vê só o código do porte anestésico, sem o R$; o dado para calcular já está no banco, só falta o mapeamento e a exibição. Mesma classe de ganho da Story 1.6 (dado que existe e não chega ao usuário). | Baixo (mapeamento estático de 9 valores + reaproveitar `formatValorBRL` e o lookup de porte já existente) | **Alta** |
+
+**Nota ao @sm:** este item não depende do modo de aprendizado (seção 7.2) e pode virar story própria imediatamente, no mesmo padrão avulso da 1.6. Gate de qualidade obrigatório: rotular explicitamente como "valor do anestesista", nunca como total do procedimento (Artigo IV — o produto não pode inventar uma soma que a CBHPM não define).
+
+### 7.2 Aprovado, escopo em duas ondas — Modo de aprendizado interativo
+
+**Onda 1 (aprovada, pronta para draft do @sm) — 100% citável com fonte oficial:**
+
+| Bloco | Conteúdo | Fonte |
+|---|---|---|
+| 1 | O que é porte — porte não é dinheiro, 14 portes + 3 subportes, onde o R$ entra (Comunicado AMB) | CBHPM, Instruções Gerais, item 1 |
+| 2 | Os quatro números de uma linha — Porte, UCO, Nº de Aux., Porte Anestésico: o que cada um paga e a quem | CBHPM, Instruções Gerais |
+| 3 | Modificadores — Urgência/Emergência (+30% sobre o porte, condicionado ao caráter do atendimento, não ao horário do relógio), via de acesso (50/70%) | CBHPM, Instruções Gerais, item 2 e item 4 |
+| 4 | Quem mais recebe — auxiliares (percentuais confirmados por edição: 30/20/20/20 até 2016, 60/40/30/30 na 2018/2022), anestesista | CBHPM, Instruções Gerais, item 5.1 + porte anestésico (item 7.1 acima) |
+
+**Restrição de conteúdo (Artigo IV, carregar para os critérios de aceite):**
+1. **Nunca explicar "por que" um procedimento paga auxiliar.** A CBHPM não publica critério geral — só o número tabelado, atribuído pela Sociedade de Especialidade. A única resposta correta da lição é "está atribuído pela Sociedade de Especialidade e publicado na coluna Nº de Aux.", nunca uma razão clínica inventada.
+2. **Toda afirmação deve citar edição.** Percentual de auxiliar e presença de regras (ex: item 2.1.3 de urgência) mudam entre as 7 edições do app — uma lição sem "na edição X" erra em pelo menos uma delas.
+3. **"Horário especial" não é o nome da regra.** O termo tem zero ocorrências nas 7 edições — é vocabulário de convênio. O nome oficial, que a lição deve ensinar, é "Atendimento de Urgência e Emergência".
+4. **Marcar nível de fonte no conteúdo entregue**, não só no relatório de pesquisa — herdar a classificação A/B/C/D de `02-research-report.md`.
+
+**Onda 2 (bloqueada — pendente de validação com o usuário):** Rol, TUSS, TISS, contrato, glosa, deflator, quem indica o auxiliar. A pesquisa só achou isso em fonte nível D (blog) ou não achou fonte nenhuma. **Decisão do usuário em 2026-08-18: adiar** — não respondeu ainda quais regras do dia a dia são de contrato/convênio (não da tabela) e que um novato erra; essa é, segundo a pesquisa, a lição de maior valor e a única que só o usuário pode fornecer. Retomar quando houver resposta, antes de dimensionar a onda 2.
+
+### 7.3 Risco da decisão
+
+O maior risco não é de conteúdo (a onda 1 é 100% rastreável a fonte oficial), é de **enquadramento do produto**: um módulo que ensina "urgência = +30% sobre o porte" pode ser lido como autorização de cobrança em vez de material de estudo. Mitigação obrigatória no critério de aceite: toda tela do modo de aprendizado leva aviso de que é material de estudo, com a regra sempre citada por item/edição, e ressalva de que o contrato do convênio pode divergir.
+
+---
+
+## Sequenciamento recomendado (revisado 2026-08-18)
+
+**Story avulsa — Valor em R$ do porte anestésico (7.1):** pronta para draft do @sm, sem dependências.
+
+**Story ou epic — Modo de aprendizado interativo, onda 1 (7.2):** pronta para draft do @sm, escopo travado nos blocos 1-4.
+
+**Bloqueado por resposta do usuário:**
+Onda 2 do modo de aprendizado (7.2) — aguardando quais regras de contrato/convênio um faturista novato mais erra.
 
 ---
 
