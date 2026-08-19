@@ -91,11 +91,28 @@ async function importEdition(edition) {
     return 0
   }
 
-  const records = JSON.parse(fs.readFileSync(filePath, 'utf8'))
+  let records = JSON.parse(fs.readFileSync(filePath, 'utf8'))
   if (records.length === 0) {
     console.log(`  ${edition.versaoLabel}: 0 registros — pulando`)
     return 0
   }
+
+  // CBHPM 2012: seção de Toxicologia (Medicina Laboratorial) foi impressa 2x
+  // no PDF fonte por quebra de página, gerando 11 códigos duplicados com
+  // valores idênticos (confirmado em output/multi/APPROVED.txt). Um upsert
+  // não pode afetar a mesma linha (mesmo codigo+versao) duas vezes na mesma
+  // instrução — precisa dedupe antes de montar o batch.
+  const vistos = new Set()
+  const dedupRecords = []
+  for (const r of records) {
+    if (vistos.has(r.codigo)) continue
+    vistos.add(r.codigo)
+    dedupRecords.push(r)
+  }
+  if (dedupRecords.length !== records.length) {
+    console.log(`  ${edition.versaoLabel}: ${records.length - dedupRecords.length} duplicata(s) removida(s) antes do upsert`)
+  }
+  records = dedupRecords
 
   const portes = await loadPorteValues(edition.versaoLabel)
   const valorUco = await loadUcoValue(edition.versaoLabel)

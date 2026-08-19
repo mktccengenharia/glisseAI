@@ -59,4 +59,19 @@ export const EDITIONS = [
     vigencia: '2015-2016',
     porteSource: { type: 'file', file: 'porte 2015-2016.pdf' },
   },
+  {
+    // 2026-08-19: adicionada a pedido do usuário, fonte fornecida diretamente
+    // (tabela_cbhpm_edicao_2012.pdf + tabela_de_portes_uco.pdf, Comunicado
+    // Oficial CBHPM de 18/10/2012, UCO = R$ 14,33). AuxPct confirmado lendo o
+    // próprio PDF, Instruções Gerais item 5.1: "30% ... primeiro auxiliar,
+    // 20% para o segundo e terceiro ... também para o quarto" — igual às
+    // edições 3ª a 2016 (formato de tabela idêntico: Código/Procedimentos/
+    // Porte/Custo Oper./Nº Aux./Porte Anest. no Cap. 3).
+    id: '2012',
+    versaoLabel: 'CBHPM 2012',
+    sourcePdf: 'CBHPM 2012.pdf',
+    auxPct: AUX_PCT_ANTIGO,
+    vigencia: '2012',
+    porteSource: { type: 'file', file: 'Porte CBHPM 2012.pdf' },
+  },
 ]

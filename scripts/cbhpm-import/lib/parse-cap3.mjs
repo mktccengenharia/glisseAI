@@ -75,6 +75,14 @@ function parseTail(text) {
       descricao: descricaoLimpa, porte: porteVal,
       custo_operacional: null, numero_auxiliares: null, porte_anestesico: null,
       fonteIncompleta: true,
+      // Traço "solto" sem nada depois é ambíguo: pode ser o porte genuíno da
+      // fonte (ex: seção 3.16.02, procedimentos só com porte anestésico), OU
+      // pode ser um travessão de pontuação dentro de um título que ainda
+      // continua na próxima linha física (ex: "...dinâmico -" quebrando antes
+      // de "tratamento cirúrgico... 8B - 2 4"). Sinalizado como tentativo só
+      // quando o porte veio do traço (nunca para "8B" etc.), para o loop de
+      // lookahead decidir se vale a pena olhar mais uma linha antes de aceitar.
+      tentative: porteVal === null,
     }
   }
 
@@ -164,6 +172,18 @@ export function parseEdition(raw, versaoLabel) {
     let wasWrapped = false
     let parsed = parseTail(rest)
 
+    // Match "tentativo" (traço solto, sem dado depois): guardado como
+    // fallback, mas o loop abaixo continua tentando mais linhas em busca de
+    // um match mais forte antes de desistir e aceitar o tentativo.
+    let tentativeParsed = null
+    let tentativeWasWrapped = false
+    let tentativeJ = i
+    if (parsed?.tentative) {
+      tentativeParsed = parsed
+      tentativeJ = i
+      parsed = null
+    }
+
     let lookaheadUsed = 0
     let j = i + 1
     while (!parsed && lookaheadUsed < 3 && j < body.length) {
@@ -172,10 +192,23 @@ export function parseEdition(raw, versaoLabel) {
       if (CODE_RE.test(nextLine.trim())) break
       if (SECTION_RE.test(nextLine.trim())) break
       rest = `${rest} ${nextLine.trim()}`
-      parsed = parseTail(rest)
+      const attempt = parseTail(rest)
       wasWrapped = true
       lookaheadUsed++
       j++
+      if (attempt?.tentative) {
+        tentativeParsed = attempt
+        tentativeWasWrapped = true
+        tentativeJ = j
+        continue
+      }
+      parsed = attempt
+    }
+
+    if (!parsed && tentativeParsed) {
+      parsed = tentativeParsed
+      wasWrapped = tentativeWasWrapped
+      j = tentativeJ
     }
 
     if (!parsed) {

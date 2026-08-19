@@ -78,6 +78,29 @@ for (const edition of EDITIONS) {
   }
   if (porteInvalidoCount > 0) console.warn(`  ${porteInvalidoCount} porte(s) inválido(s) anulado(s) (ex: "0A")`)
 
+  // Quarentena pontual: só na CBHPM 2016, a página do par "Terapia por ondas
+  // de choque extracorpórea ... 1ª aplicação / reaplicações" (seções 3.07.30
+  // e 3.07.32) tem extração de PDF corrompida — os valores de porte de UM
+  // código aparecem deslocados para a linha física de OUTRO código vizinho
+  // (confirmado comparando contra CBHPM 2014/2012/2010/2008, que renderizam a
+  // mesma seção de forma limpa: 3.07.30.13-9 e 3.07.32.05-0 pegariam valores
+  // que não são os seus). Mantido como "fonte incompleta" (Article IV — não
+  // inventar dado a partir de uma extração que sabemos estar embaralhada
+  // nessa página específica) em vez de descartar a melhoria geral do fix de
+  // wrap para as outras 317 recuperações nas 6 edições.
+  if (edition.id === '2016') {
+    const QUARENTENA_2016 = new Set(['3.07.30.13-9', '3.07.32.05-0'])
+    let quarentenaCount = 0
+    for (const r of parsed.records) {
+      if (QUARENTENA_2016.has(r.codigo) && r.porte !== null) {
+        quarentenaCount++
+        r.porte = null; r.custo_operacional = null; r.numero_auxiliares = null; r.porte_anestesico = null
+        r.fonteIncompleta = true; r.paginaCorrompida = true
+      }
+    }
+    if (quarentenaCount > 0) console.warn(`  ${quarentenaCount} registro(s) em quarentena (página com extração corrompida, ver comentário no código)`)
+  }
+
   fs.writeFileSync(path.join(editionOutDir, 'procedimentos.json'), JSON.stringify(parsed.records, null, 2))
   fs.writeFileSync(path.join(editionOutDir, 'report.json'), JSON.stringify(parsed.report, null, 2))
   fs.writeFileSync(path.join(editionOutDir, 'porte-valores.json'), JSON.stringify(porteData, null, 2))
