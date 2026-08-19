@@ -30,6 +30,19 @@ export const TOPICOS = [
     titulo: 'O que é Porte',
     paragrafos: [
       {
+        texto: 'Cada procedimento tem um código no formato X.XX.XX.XX-D: capítulo, subcapítulo, grupo e item, terminando num dígito verificador. Na tabela abaixo, os três primeiros procedimentos (consulta em consultório, em domicílio e em pronto socorro) só mudam no par de números antes do dígito final: é o mesmo grupo "Consultas", itens diferentes.',
+        fonte: 'Observação estrutural direta, comparando os códigos da própria tabela (não é uma regra numerada das Instruções Gerais)',
+        imagem: {
+          src: '/aprendizado/cbhpm-3ed-consultas.png',
+          alt: 'Recorte da tabela CBHPM 3ª edição, seção Consultas, mostrando códigos, procedimentos e porte',
+          legenda: 'Recorte de CBHPM, 3ª edição, seção "Consultas" (p. 20)',
+        },
+      },
+      {
+        texto: 'No Glisse AI, você pesquisa por código (com ou sem pontuação, ex: "1.01.01.01-2" ou "10101012") ou por parte do nome do procedimento (ex: "consulta consultório"). Selecione a edição da CBHPM antes de buscar: o mesmo código pode ter porte e valor diferentes em cada edição.',
+        fonte: 'Funcionalidade do Glisse AI (não é regra da CBHPM)',
+      },
+      {
         texto: 'O porte não representa dinheiro. Ele só estabelece uma comparação entre procedimentos quanto à complexidade técnica, tempo de execução, atenção requerida e grau de treinamento do profissional.',
         fonte: 'CBHPM, item 1.2 (texto idêntico da 3ª edição à 2022) · relatório seção 3.1',
       },

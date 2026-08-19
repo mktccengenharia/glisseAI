@@ -215,6 +215,17 @@ export default function ModoAprendizado() {
             {topico.paragrafos.map((p, i) => (
               <div key={i}>
                 <p className="text-sm text-black leading-relaxed">{p.texto}</p>
+                {p.imagem && (
+                  <figure className="mt-2 mb-1">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- recorte estático de PDF, sem otimização de next/image necessária */}
+                    <img
+                      src={p.imagem.src}
+                      alt={p.imagem.alt}
+                      className="w-full max-w-md rounded-lg border border-gray-200"
+                    />
+                    <figcaption className="text-[11px] text-gray-400 mt-1">{p.imagem.legenda}</figcaption>
+                  </figure>
+                )}
                 <p className="text-[11px] text-gray-400 mt-0.5">Fonte: {p.fonte}</p>
               </div>
             ))}
