@@ -19,10 +19,16 @@ export const RELATORIO_PESQUISA = 'docs/research/2026-08-17-fundamentos-faturame
 // Procedimento real usado como exemplo ao vivo nos 4 blocos — buscado do
 // banco em tempo real via /api/search, nunca hardcoded como resultado.
 // Escolhido por ter porte, UCO, múltiplos auxiliares e porte anestésico
-// todos presentes na mesma linha (CBHPM 2018), cobrindo os 4 blocos com uma
-// única busca.
+// todos presentes na mesma linha, cobrindo os 4 blocos com uma única busca.
+//
+// 2026-08-19: edição do exemplo trocada de CBHPM 2018 para CBHPM 2016 a
+// pedido do usuário ("a gente usa até a de 2016 mesmo") — é a edição que a
+// operação do usuário realmente fatura, então o exemplo ao vivo deve
+// refletir o percentual de auxiliar que ele usa no dia a dia (30/20/20/20),
+// não o da 2018/2022 (60/40/30/30). O mesmo código existe nas duas edições
+// com todos os campos necessários (confirmado via /api/search).
 export const CODIGO_EXEMPLO = '3.02.05.28-0'
-export const VERSAO_EXEMPLO = 'CBHPM 2018'
+export const VERSAO_EXEMPLO = 'CBHPM 2016'
 
 export const TOPICOS = [
   {
